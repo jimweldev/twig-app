@@ -97,6 +97,8 @@ fn app_ready(app: AppHandle) {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
             // Fallback: never leave the user on the splash if the frontend fails to report ready.
             let handle = app.handle().clone();

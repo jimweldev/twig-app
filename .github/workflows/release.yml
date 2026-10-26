@@ -8,6 +8,11 @@
 #   vars     SIGNPATH_ORGANIZATION_ID, SIGNPATH_PROJECT_SLUG,
 #            SIGNPATH_SIGNING_POLICY_SLUG, SIGNPATH_ARTIFACT_CONFIGURATION_SLUG
 # Without them the installers are published unsigned.
+#
+# In-app updates: the installers are also signed with the Tauri updater key
+# (secrets TAURI_SIGNING_PRIVATE_KEY and TAURI_SIGNING_PRIVATE_KEY_PASSWORD)
+# and described in latest.json, which installed apps read to find updates.
+# This runs after SignPath, because code signing changes the files.
 name: Release desktop app
 
 on:
@@ -25,6 +30,8 @@ jobs:
     runs-on: windows-latest
     env:
       SIGNPATH_API_TOKEN: ${{ secrets.SIGNPATH_API_TOKEN }}
+      TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+      TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
     steps:
       - uses: actions/checkout@v7
 
@@ -88,6 +95,22 @@ jobs:
         if: env.SIGNPATH_API_TOKEN == ''
         shell: bash
         run: cp -r dist/unsigned dist/release
+
+      - name: Sign for the updater and write latest.json
+        shell: bash
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          if [ -z "$TAURI_SIGNING_PRIVATE_KEY" ]; then
+            echo "::error::TAURI_SIGNING_PRIVATE_KEY is not set, so installed apps could not verify this update."
+            exit 1
+          fi
+          mkdir -p dist/sigs
+          for f in dist/release/*-setup.exe dist/release/*.msi; do
+            npm run tauri -w @twig/desktop -- signer sign "$GITHUB_WORKSPACE/$f"
+            mv "$f.sig" dist/sigs/
+          done
+          node .github/scripts/latest-json.mjs "$VERSION" dist/release dist/sigs dist/release/latest.json
 
       - name: Publish GitHub Release
         shell: bash

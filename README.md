@@ -26,11 +26,11 @@ npm test                 # run grading tests
 - **Windows installer:** `.github/workflows/release.yml` builds it and attaches it to a GitHub Release. Bump the version in `apps/desktop/src-tauri/tauri.conf.json`, then push a matching tag:
 
   ```bash
-  git tag v0.1.0
-  git push origin v0.1.0
+  git tag v0.1.1
+  git push origin v0.1.1
   ```
 
-  The site always links to the latest release. Installers are signed through SignPath once set up — see [CODE_SIGNING.md](CODE_SIGNING.md).
+  The site always links to the latest release, and installed apps find it under **School profile → Check for updates** (signed with the Tauri updater key; see [CODE_SIGNING.md](CODE_SIGNING.md)). Installers are signed through SignPath once set up — see [CODE_SIGNING.md](CODE_SIGNING.md).
 
 ## Databases
 

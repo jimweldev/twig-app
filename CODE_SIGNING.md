@@ -29,7 +29,17 @@ This program will not transfer any information to other networked systems
 unless specifically requested by the user or the person installing or
 operating it. TWIG works offline: class records stay in a database on the
 user's computer, and grade files move between teachers only when a teacher
-exports one and sends it themselves.
+exports one and sends it themselves. The only network request TWIG makes is when the user clicks
+**Check for updates**, which reads the latest release information from GitHub.
+
+## Update signing
+
+Installed copies update themselves through the Tauri updater. Every release's
+installers are also signed with the TWIG updater key, and the app refuses any
+update whose signature doesn't match the public key built into it
+(`plugins.updater.pubkey` in `apps/desktop/src-tauri/tauri.conf.json`). The
+private key is kept by the maintainer and in the repository secrets
+`TAURI_SIGNING_PRIVATE_KEY` and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`.
 
 ## Setting up signing (maintainers)
 

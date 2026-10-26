@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Field } from "@/components/field";
 import { PageHeader } from "@/components/page";
+import { UpdateCard } from "@/components/update-card";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -58,6 +59,7 @@ export function ProfilePage({ onSaved, onError }: { onSaved: () => Promise<void>
           {saved && <span className="text-sm text-primary">Saved</span>}
         </CardFooter>
       </Card>
+      <UpdateCard />
     </div>
   );
 }
