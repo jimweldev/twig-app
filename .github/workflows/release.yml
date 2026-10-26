@@ -1,0 +1,47 @@
+# Builds the Windows installer and publishes it as a GitHub Release.
+# Run it by pushing a tag that matches the app version, e.g.:
+#   git tag v0.1.0 && git push origin v0.1.0
+name: Release desktop app
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: apps/desktop/src-tauri -> target
+
+      - run: npm ci
+
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          projectPath: apps/desktop
+          tauriScript: npm run tauri
+          # __VERSION__ is the version in apps/desktop/src-tauri/tauri.conf.json.
+          tagName: v__VERSION__
+          releaseName: TWIG v__VERSION__
+          releaseBody: |
+            Download **TWIG_*_x64-setup.exe** below and run it.
+
+            Windows may show a SmartScreen warning because the installer isn't code-signed yet: click "More info", then "Run anyway".
+          releaseDraft: false
+          prerelease: false

@@ -1,0 +1,19 @@
+{
+  "name": "twig",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "npm run tauri dev -w @twig/desktop",
+    "dev:desktop": "npm run tauri dev -w @twig/desktop",
+    "dev:desktop:web": "npm run dev -w @twig/desktop",
+    "dev:web": "npm run dev -w @twig/web",
+    "build": "npm run build:web && npm run build:desktop",
+    "build:desktop": "npm run tauri build -w @twig/desktop",
+    "build:web": "npm run build -w @twig/web",
+    "test": "npm run test -w @twig/desktop"
+  }
+}
