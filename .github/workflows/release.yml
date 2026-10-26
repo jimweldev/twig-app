@@ -1,6 +1,13 @@
-# Builds the Windows installer and publishes it as a GitHub Release.
-# Run it by pushing a tag that matches the app version, e.g.:
+# Builds the Windows installers, signs them through SignPath (once set up),
+# and publishes them as a GitHub Release. Run it by pushing a tag that matches
+# the version in apps/desktop/src-tauri/tauri.conf.json:
 #   git tag v0.1.0 && git push origin v0.1.0
+#
+# Signing turns on when these exist in the repo settings (see CODE_SIGNING.md):
+#   secret   SIGNPATH_API_TOKEN
+#   vars     SIGNPATH_ORGANIZATION_ID, SIGNPATH_PROJECT_SLUG,
+#            SIGNPATH_SIGNING_POLICY_SLUG, SIGNPATH_ARTIFACT_CONFIGURATION_SLUG
+# Without them the installers are published unsigned.
 name: Release desktop app
 
 on:
@@ -10,14 +17,18 @@ on:
 
 permissions:
   contents: write
+  # SignPath reads this job's details to verify where the artifact was built.
+  actions: read
 
 jobs:
-  windows:
+  release:
     runs-on: windows-latest
+    env:
+      SIGNPATH_API_TOKEN: ${{ secrets.SIGNPATH_API_TOKEN }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: npm
@@ -30,18 +41,72 @@ jobs:
 
       - run: npm ci
 
-      - uses: tauri-apps/tauri-action@v0
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          projectPath: apps/desktop
-          tauriScript: npm run tauri
-          # __VERSION__ is the version in apps/desktop/src-tauri/tauri.conf.json.
-          tagName: v__VERSION__
-          releaseName: TWIG v__VERSION__
-          releaseBody: |
-            Download **TWIG_*_x64-setup.exe** below and run it.
+      - name: Read app version
+        id: version
+        shell: bash
+        run: |
+          v=$(node -p "require('./apps/desktop/src-tauri/tauri.conf.json').version")
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          if [ "$GITHUB_REF_TYPE" = "tag" ] && [ "$GITHUB_REF_NAME" != "v$v" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME doesn't match the app version v$v in tauri.conf.json"
+            exit 1
+          fi
 
-            Windows may show a SmartScreen warning because the installer isn't code-signed yet: click "More info", then "Run anyway".
-          releaseDraft: false
-          prerelease: false
+      - name: Build installers
+        run: npm run tauri -w @twig/desktop -- build
+
+      - name: Collect installers
+        shell: bash
+        run: |
+          mkdir -p dist/unsigned
+          cp apps/desktop/src-tauri/target/release/bundle/nsis/*-setup.exe dist/unsigned/
+          cp apps/desktop/src-tauri/target/release/bundle/msi/*.msi dist/unsigned/
+          ls -l dist/unsigned
+
+      - name: Upload unsigned installers
+        id: upload
+        uses: actions/upload-artifact@v7
+        with:
+          name: installers-unsigned
+          path: dist/unsigned
+          if-no-files-found: error
+
+      - name: Sign with SignPath
+        if: env.SIGNPATH_API_TOKEN != ''
+        uses: signpath/github-action-submit-signing-request@v2
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG }}
+          artifact-configuration-slug: ${{ vars.SIGNPATH_ARTIFACT_CONFIGURATION_SLUG }}
+          github-artifact-id: ${{ steps.upload.outputs.artifact-id }}
+          wait-for-completion: true
+          output-artifact-directory: dist/release
+
+      - name: Use unsigned installers (SignPath not set up yet)
+        if: env.SIGNPATH_API_TOKEN == ''
+        shell: bash
+        run: cp -r dist/unsigned dist/release
+
+      - name: Publish GitHub Release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+          SIGNED: ${{ env.SIGNPATH_API_TOKEN != '' }}
+        run: |
+          {
+            echo "Download **TWIG_${VERSION}_x64-setup.exe** below and run it."
+            echo
+            if [ "$SIGNED" = "true" ]; then
+              echo "Free code signing provided by [SignPath.io](https://about.signpath.io), certificate by [SignPath Foundation](https://signpath.org)."
+            else
+              echo "This installer isn't code-signed yet, so Windows SmartScreen may warn the first time: click **More info**, then **Run anyway**."
+            fi
+          } > notes.md
+          if gh release view "v$VERSION" > /dev/null 2>&1; then
+            gh release upload "v$VERSION" dist/release/* --clobber
+          else
+            gh release create "v$VERSION" dist/release/* --title "TWIG v$VERSION" --notes-file notes.md --target "$GITHUB_SHA"
+          fi

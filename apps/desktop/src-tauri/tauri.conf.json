@@ -48,6 +48,10 @@
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "publisher": "Jimwel Dizon",
+    "copyright": "Copyright (c) 2026 Jimwel Dizon. MIT License.",
+    "shortDescription": "Teacher’s Work Integration Gateway",
+    "license": "MIT"
   }
 }

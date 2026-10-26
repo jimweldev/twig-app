@@ -30,7 +30,7 @@ npm test                 # run grading tests
   git push origin v0.1.0
   ```
 
-  The site always links to the latest release.
+  The site always links to the latest release. Installers are signed through SignPath once set up — see [CODE_SIGNING.md](CODE_SIGNING.md).
 
 ## Databases
 
@@ -62,3 +62,7 @@ Rules follow DepEd Order No. 015, s. 2026 as reported by secondary sources; veri
 - **Kindergarten domains.** The seven domains come from the earlier Kindergarten progress report; DO 015 points to the *Tracking Our Progress: Kindergarten!* guide, which may group them differently.
 - **Senior High.** Subject types and weights follow secondary summaries of DO 015 (Grade 11, strengthened curriculum) and DO 8, s. 2015 (Grade 12, old curriculum). Grade 12 old-curriculum subjects reuse the DO 015 exam split (ST1/ST2/Term Exam) in place of DO 8's single quarterly assessment.
 - **Lowest transmutation band.** One source maps IG 0–4.67 to 60; TWIG follows the band pattern the other brackets share (IG above 4.67 → 61). Check against the official table.
+
+## License
+
+[MIT](LICENSE) © 2026 Jimwel Dizon

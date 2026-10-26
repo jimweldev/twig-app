@@ -2,7 +2,9 @@
 name = "desktop"
 version = "0.1.0"
 description = "TWIG - Teacher's Work Integration Gateway"
-authors = ["you"]
+authors = ["Jimwel Dizon"]
+license = "MIT"
+repository = "https://github.com/jimweldev/twig-app"
 edition = "2024"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html

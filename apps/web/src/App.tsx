@@ -148,7 +148,7 @@ const FEATURES: { title: string; text: string; icon: ReactNode }[] = [
 const FAQ: [string, ReactNode][] = [
   [
     "Is TWIG an official DepEd app?",
-    "No. TWIG is an independent, free tool made by a teacher-developer, with its source code public on GitHub. It follows published DepEd orders (DO 015, s. 2026 for grading), but always check computations against the official issuances and your school's forms.",
+    "No. TWIG is an independent, free and open-source (MIT) tool made by a teacher-developer. It follows published DepEd orders (DO 015, s. 2026 for grading), but always check computations against the official issuances and your school's forms.",
   ],
   ["Do I need internet?", "Only to download it. TWIG runs fully offline after that, including sharing grades between teachers."],
   [
@@ -160,7 +160,7 @@ const FAQ: [string, ReactNode][] = [
   ],
   [
     "Windows says it protected my PC. Is it safe?",
-    "The installer isn't code-signed yet, so Windows SmartScreen shows a warning the first time. Click “More info”, then “Run anyway”. The full source code is public on GitHub.",
+    "Until code signing is in place (TWIG has applied for free signing through the SignPath Foundation), Windows SmartScreen shows a warning the first time. Click “More info”, then “Run anyway”. The full source code is public on GitHub.",
   ],
   ["Is there a Mac or Linux version?", "Not yet — TWIG is Windows-only for now."],
 ];
@@ -203,7 +203,7 @@ export default function App() {
           <div className="relative mx-auto grid max-w-6xl items-center gap-12 px-6 py-20 lg:grid-cols-[1.05fr_1fr] lg:py-28">
             <div>
               <p className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-800">
-                Free · Works offline · Source on GitHub
+                Free · Open source · Works offline
               </p>
               <h1 className="mt-5 text-4xl font-bold tracking-tight text-stone-900 sm:text-5xl lg:text-6xl">
                 Your class records,
@@ -321,7 +321,7 @@ export default function App() {
           </div>
           <p>Not affiliated with the Department of Education.</p>
           <a href={`https://github.com/${REPO}`} className="hover:text-stone-800">
-            Source on GitHub
+            MIT licensed · Source on GitHub
           </a>
         </div>
       </footer>
