@@ -10,60 +10,72 @@ pub const DB_URL: &str = if cfg!(debug_assertions) {
     "sqlite:twig.db"
 };
 
+/// Migration SQL with Windows line endings turned into `\n`. sqlx stores a
+/// checksum of each migration's exact text, so a file checked out with CRLF
+/// (git on Windows) would otherwise look "modified" next to one applied with LF.
+fn lf(sql: &'static str) -> &'static str {
+    if sql.contains('\r') {
+        // Runs once per migration at startup; leaking keeps the &'static str sqlx needs.
+        Box::leak(sql.replace("\r\n", "\n").into_boxed_str())
+    } else {
+        sql
+    }
+}
+
 fn migrations() -> Vec<Migration> {
     vec![
         Migration {
             version: 1,
             description: "init_ecr",
-            sql: include_str!("../migrations/001_init.sql"),
+            sql: lf(include_str!("../migrations/001_init.sql")),
             kind: MigrationKind::Up,
         },
         Migration {
             version: 2,
             description: "school_years_sections",
-            sql: include_str!("../migrations/002_school_years_sections.sql"),
+            sql: lf(include_str!("../migrations/002_school_years_sections.sql")),
             kind: MigrationKind::Up,
         },
         Migration {
             version: 3,
             description: "section_learners",
-            sql: include_str!("../migrations/003_section_learners.sql"),
+            sql: lf(include_str!("../migrations/003_section_learners.sql")),
             kind: MigrationKind::Up,
         },
         Migration {
             version: 4,
             description: "received_grades",
-            sql: include_str!("../migrations/004_received_grades.sql"),
+            sql: lf(include_str!("../migrations/004_received_grades.sql")),
             kind: MigrationKind::Up,
         },
         Migration {
             version: 5,
             description: "advisory_section",
-            sql: include_str!("../migrations/005_advisory_section.sql"),
+            sql: lf(include_str!("../migrations/005_advisory_section.sql")),
             kind: MigrationKind::Up,
         },
         Migration {
             version: 6,
             description: "report_cards",
-            sql: include_str!("../migrations/006_report_cards.sql"),
+            sql: lf(include_str!("../migrations/006_report_cards.sql")),
             kind: MigrationKind::Up,
         },
         Migration {
             version: 7,
             description: "attendance",
-            sql: include_str!("../migrations/007_attendance.sql"),
+            sql: lf(include_str!("../migrations/007_attendance.sql")),
             kind: MigrationKind::Up,
         },
         Migration {
             version: 8,
             description: "birthdate_observed_values",
-            sql: include_str!("../migrations/008_birthdate_observed_values.sql"),
+            sql: lf(include_str!("../migrations/008_birthdate_observed_values.sql")),
             kind: MigrationKind::Up,
         },
         Migration {
             version: 9,
             description: "all_grade_levels",
-            sql: include_str!("../migrations/009_all_grade_levels.sql"),
+            sql: lf(include_str!("../migrations/009_all_grade_levels.sql")),
             kind: MigrationKind::Up,
         },
     ]
@@ -119,4 +131,16 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn migrations_checksum_the_same_with_crlf_or_lf() {
+        assert_eq!(lf("CREATE TABLE a (x);\r\nCREATE TABLE b (y);\r\n"), "CREATE TABLE a (x);\nCREATE TABLE b (y);\n");
+        assert_eq!(lf("SELECT 1;\n"), "SELECT 1;\n");
+        assert!(migrations().iter().all(|m| !m.sql.contains('\r')));
+    }
 }

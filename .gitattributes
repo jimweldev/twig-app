@@ -1,0 +1,9 @@
+# Check text files out with LF everywhere. Migration SQL in particular must be
+# byte-identical on every machine: sqlx records a checksum of each migration.
+* text=auto eol=lf
+*.sql text eol=lf
+
+# Binary assets
+*.png binary
+*.ico binary
+*.icns binary
