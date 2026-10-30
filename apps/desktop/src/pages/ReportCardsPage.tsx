@@ -112,7 +112,7 @@ function ReportCards({ section }: { section: Section }) {
         <Card>
           <CardHeader>
             <CardTitle>Subject order</CardTitle>
-            <CardDescription>Drag or use the arrows. Saved for this section.</CardDescription>
+            <CardDescription>Drag to reorder. Saved for this section.</CardDescription>
           </CardHeader>
           <CardContent>
             {!loading && mode === "kinder" ? (
@@ -143,7 +143,7 @@ function ReportCards({ section }: { section: Section }) {
                   {section.is_advisory && " or import subject teachers' grade files."}
                 </p>
               ) : (
-                <SubjectOrderEditor grade={section.grade_level} areas={areas} onChange={setOrder} />
+                <SubjectOrderEditor areas={areas} onChange={setOrder} />
               ))
             )}
           </CardContent>

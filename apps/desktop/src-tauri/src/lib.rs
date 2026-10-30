@@ -1,3 +1,6 @@
+#[cfg(windows)]
+mod pdf;
+
 use std::time::Duration;
 use tauri::{AppHandle, Manager};
 use tauri_plugin_sql::{Migration, MigrationKind};
@@ -78,6 +81,30 @@ fn migrations() -> Vec<Migration> {
             sql: lf(include_str!("../migrations/009_all_grade_levels.sql")),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 10,
+            description: "certificate_templates",
+            sql: lf(include_str!("../migrations/010_certificate_templates.sql")),
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 11,
+            description: "lesson_plans",
+            sql: lf(include_str!("../migrations/011_lesson_plans.sql")),
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 12,
+            description: "certificate_recipients",
+            sql: lf(include_str!("../migrations/012_certificate_recipients.sql")),
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 13,
+            description: "certificate_kind",
+            sql: lf(include_str!("../migrations/013_certificate_kind.sql")),
+            kind: MigrationKind::Up,
+        },
     ]
 }
 
@@ -100,6 +127,18 @@ fn db_url() -> &'static str {
     DB_URL
 }
 
+/// Saves the page as it prints to a PDF at `path`, with no header or footer.
+#[tauri::command]
+async fn save_pdf(webview: tauri::Webview, path: String, width_in: f64, height_in: f64) -> Result<(), String> {
+    #[cfg(windows)]
+    return pdf::save(webview, path, width_in, height_in).await;
+    #[cfg(not(windows))]
+    {
+        let _ = (webview, path, width_in, height_in);
+        Err("Saving as PDF works on Windows only.".into())
+    }
+}
+
 /// Called by the frontend once its first data has loaded.
 #[tauri::command]
 fn app_ready(app: AppHandle) {
@@ -120,7 +159,7 @@ pub fn run() {
             });
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![app_ready, db_url])
+        .invoke_handler(tauri::generate_handler![app_ready, db_url, save_pdf])
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(

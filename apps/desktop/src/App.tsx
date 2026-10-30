@@ -1,6 +1,6 @@
 import { Fragment, useEffect, type ReactNode } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { Award, Gamepad2, NotebookPen, X } from "lucide-react";
+import { X } from "lucide-react";
 import "./App.css";
 import { AppSidebar } from "@/app/AppSidebar";
 import { RouterProvider, useRouter, type Route } from "@/app/router";
@@ -22,7 +22,11 @@ import { ClassView } from "@/ecr/ClassView";
 import { AttendancePage } from "@/pages/AttendancePage";
 import { ClassRecordsPage } from "@/pages/ClassRecordsPage";
 import { ClassSectionPage } from "@/pages/ClassSectionPage";
-import { ComingSoonPage } from "@/pages/ComingSoonPage";
+import { CertificateEditorPage } from "@/pages/CertificateEditorPage";
+import { CertificatesPage } from "@/pages/CertificatesPage";
+import { GAMES, GamePage, GamesPage } from "@/pages/GamesPage";
+import { LessonPlanEditorPage } from "@/pages/LessonPlanEditorPage";
+import { LessonPlansPage } from "@/pages/LessonPlansPage";
 import { DashboardPage } from "@/pages/DashboardPage";
 import { ProfilePage } from "@/pages/ProfilePage";
 import { ReportCardsPage } from "@/pages/ReportCardsPage";
@@ -76,10 +80,26 @@ function useCrumbs(): Crumb[] {
       return [{ label: "Report cards" }];
     case "lessonPlans":
       return [{ label: "Lesson plans" }];
+    case "lessonPlan":
+      return [{ label: "Lesson plans", route: { page: "lessonPlans" } }, { label: "Edit lesson plan" }];
     case "certificates":
       return [{ label: "Certificates" }];
+    case "certificate":
+      return [{ label: "Certificates", route: { page: "certificates" } }, { label: "Edit template" }];
     case "games":
       return [{ label: "Games" }];
+    case "game": {
+      // Opened from a class record: keep the trail back to it.
+      const c = route.classId !== undefined ? classes.find((x) => x.id === route.classId) : undefined;
+      return c
+        ? [
+            { label: "Class records", route: { page: "classRecords" } },
+            { label: sectionLabel(c.section_id), route: { page: "classSection", sectionId: c.section_id } },
+            { label: c.learning_area, route: { page: "class", id: c.id } },
+            { label: GAMES[route.game].title },
+          ]
+        : [{ label: "Games", route: { page: "games" } }, { label: GAMES[route.game].title }];
+    }
     case "profile":
       return [{ label: "School profile" }];
   }
@@ -178,29 +198,23 @@ function Page() {
         </RequireActiveYear>
       );
     case "lessonPlans":
-      return (
-        <ComingSoonPage
-          icon={NotebookPen}
-          title="Lesson plans"
-          description="Write and organize daily lesson logs and lesson plans, linked to your sections and learning areas."
-        />
-      );
+      return <LessonPlansPage />;
+    case "lessonPlan":
+      return <LessonPlanEditorPage key={route.id} id={route.id} />;
     case "certificates":
-      return (
-        <ComingSoonPage
-          icon={Award}
-          title="Certificates"
-          description="Generate certificates of recognition and awards from your learners' grades."
-        />
-      );
+      return <CertificatesPage />;
+    case "certificate":
+      return <CertificateEditorPage key={route.id} id={route.id} />;
     case "games":
       return (
-        <ComingSoonPage
-          icon={Gamepad2}
-          title="Games"
-          description="Classroom games and quizzes you can run offline with your class."
-        />
+        <RequireActiveYear>
+          <GamesPage />
+        </RequireActiveYear>
       );
+    case "game": {
+      const section = sections.find((s) => s.id === route.sectionId);
+      return section ? <GamePage key={section.id} game={route.game} section={section} /> : <NotFound />;
+    }
     case "profile":
       return <ProfilePage onSaved={refresh} onError={onError} />;
   }

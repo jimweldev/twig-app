@@ -1,13 +1,15 @@
-import { Fragment, useState } from "react";
-import { Pencil, Trash2, UserPlus } from "lucide-react";
+import { Fragment, useEffect, useState } from "react";
+import { ClipboardPaste, Pencil, Trash2, UserPlus } from "lucide-react";
+import { cn } from "cn";
 import { ConfirmDelete } from "@/components/confirm-delete";
 import { Field } from "@/components/field";
 import { SimpleSelect } from "@/components/simple-select";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -25,12 +27,74 @@ import { Textarea } from "@/components/ui/textarea";
 import { addLearners, deleteLearner, updateLearner, type Learner, type NewLearner, type Sex } from "@/lib/db";
 import { ageOn, displayName, parseLearnerLine } from "@/lib/names";
 import { todayIso } from "@/attendance/calendar";
+import { moveFocus } from "@/ecr/TermSheet";
 
 const EMPTY: NewLearner = { lrn: "", last_name: "", first_name: "", middle_name: "", sex: "M" };
 const SEX_OPTIONS = [
   { value: "M", label: "Male" },
   { value: "F", label: "Female" },
 ];
+
+/** An LRN is up to 12 digits; blank is allowed. */
+const cleanLrn = (text: string) => text.replace(/\s/g, "");
+const isLrnText = (text: string) => /^\d{0,12}$/.test(cleanLrn(text));
+
+/**
+ * The LRN column works like Excel: type straight into it, Enter and the arrow keys
+ * move up and down, Esc puts back what was there, and a column of LRNs copied from
+ * Excel fills this row and the ones below.
+ */
+function LrnCell({
+  value,
+  row,
+  onCommit,
+  onPasteColumn,
+}: {
+  value: string;
+  row: number;
+  onCommit: (lrn: string) => void;
+  onPasteColumn: (lrns: string[]) => void;
+}) {
+  const [text, setText] = useState(value);
+  useEffect(() => setText(value), [value]);
+  const invalid = !isLrnText(text);
+
+  return (
+    <input
+      data-cell={`${row}:0`}
+      value={text}
+      inputMode="numeric"
+      placeholder="Type LRN"
+      aria-label="LRN"
+      aria-invalid={invalid}
+      title={invalid ? "An LRN is up to 12 digits" : undefined}
+      className={cn(
+        "h-8 w-36 rounded-sm bg-transparent px-2 font-mono text-xs outline-none placeholder:font-sans placeholder:text-muted-foreground/40 hover:bg-muted/60 focus:bg-background focus:ring-2 focus:ring-primary",
+        invalid && "bg-red-50 text-destructive",
+      )}
+      onChange={(e) => setText(e.target.value)}
+      onFocus={(e) => e.currentTarget.select()}
+      onBlur={() => {
+        if (cleanLrn(text) !== value && !invalid) onCommit(cleanLrn(text));
+      }}
+      onKeyDown={(e) => {
+        if (e.key === "Escape") {
+          setText(value);
+          e.currentTarget.blur();
+          return;
+        }
+        moveFocus(e, row, 0);
+      }}
+      onPaste={(e) => {
+        const lines = e.clipboardData.getData("text/plain").replace(/\r\n?/g, "\n").replace(/\n$/, "").split("\n");
+        if (lines.length < 2) return;
+        e.preventDefault();
+        // Only the first cell of each copied row is an LRN.
+        onPasteColumn(lines.map((line) => cleanLrn(line.split("\t")[0])));
+      }}
+    />
+  );
+}
 
 /** Shared inputs for adding and editing a learner. */
 function LearnerFields<T extends NewLearner>({ value, onChange }: { value: T; onChange: (v: T) => void }) {
@@ -73,6 +137,10 @@ export function SectionLearners({
   const [editing, setEditing] = useState<Learner | null>(null);
   const [bulk, setBulk] = useState("");
   const [bulkSex, setBulkSex] = useState<Sex>("M");
+  const [adding, setAdding] = useState(false);
+  const [pasting, setPasting] = useState(false);
+  // The last learner added, so the teacher sees it worked while adding the next one.
+  const [added, setAdded] = useState("");
 
   const run = async (fn: () => Promise<unknown>) => {
     try {
@@ -92,9 +160,38 @@ export function SectionLearners({
     ["M", "Male"],
     ["F", "Female"],
   ];
+  // Rows in the order shown, so arrow keys and pasted columns run through both groups.
+  const shown = groups.flatMap(([sex]) => learners.filter((l) => l.sex === sex));
+
+  const pasteLrns = (from: number, lrns: string[]) =>
+    run(async () => {
+      for (const [i, lrn] of lrns.entries()) {
+        const l = shown[from + i];
+        if (l && isLrnText(lrn) && lrn !== l.lrn) await updateLearner({ ...l, lrn });
+      }
+    });
 
   return (
-    <div className="grid grid-cols-[1fr_22rem] items-start gap-6">
+    <div className="flex flex-col gap-3">
+      <div className="flex justify-end gap-2">
+        <Button
+          variant="outline"
+          onClick={() => {
+            setBulk("");
+            setPasting(true);
+          }}
+        >
+          <ClipboardPaste /> Paste class list
+        </Button>
+        <Button
+          onClick={() => {
+            setAdded("");
+            setAdding(true);
+          }}
+        >
+          <UserPlus /> Add learner
+        </Button>
+      </div>
       <Card className="py-0">
         <Table>
           <TableHeader>
@@ -120,7 +217,14 @@ export function SectionLearners({
                     <TableRow key={l.id} className="group">
                       <TableCell className="pl-4 text-muted-foreground">{i + 1}</TableCell>
                       <TableCell className="font-medium">{displayName(l)}</TableCell>
-                      <TableCell className="font-mono text-xs text-muted-foreground">{l.lrn}</TableCell>
+                      <TableCell className="py-0">
+                        <LrnCell
+                          value={l.lrn}
+                          row={shown.indexOf(l)}
+                          onCommit={(lrn) => run(() => updateLearner({ ...l, lrn }))}
+                          onPasteColumn={(lrns) => pasteLrns(shown.indexOf(l), lrns)}
+                        />
+                      </TableCell>
                       <TableCell className="text-muted-foreground tabular-nums" title={l.birthdate || "No birthdate"}>
                         {ageOn(l.birthdate, todayIso()) ?? "—"}
                       </TableCell>
@@ -154,68 +258,84 @@ export function SectionLearners({
         )}
       </Card>
 
-      <div className="flex flex-col gap-6">
-        <Card>
-          <CardHeader>
-            <CardTitle>Add learner</CardTitle>
-          </CardHeader>
-          <CardContent>
+      <Dialog open={adding} onOpenChange={setAdding}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add learner</DialogTitle>
+            <DialogDescription>
+              {added ? `Added ${added}. Add the next one, or close when done.` : "Stays open so you can add several."}
+            </DialogDescription>
+          </DialogHeader>
+          <form
+            id="add-learner-form"
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (!form.last_name.trim() || !form.first_name.trim()) return;
+              run(async () => {
+                await addLearners(sectionId, [form]);
+                setAdded(displayName(form));
+                setForm({ ...EMPTY, sex: form.sex });
+              });
+            }}
+          >
             <LearnerFields value={form} onChange={setForm} />
+          </form>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAdding(false)}>
+              Close
+            </Button>
             <Button
-              className="mt-4"
+              type="submit"
+              form="add-learner-form"
               disabled={!form.last_name.trim() || !form.first_name.trim()}
-              onClick={() =>
-                run(async () => {
-                  await addLearners(sectionId, [form]);
-                  setForm({ ...EMPTY, sex: form.sex });
-                })
-              }
             >
               <UserPlus /> Add learner
             </Button>
-          </CardContent>
-        </Card>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Paste class list</CardTitle>
-            <CardDescription>
-              One learner per line: <code>LAST, FIRST, MIDDLE</code>, or cells copied from Excel
-              (<code>LRN · Last · First · Middle · Birthdate</code>).
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Textarea
-              className="h-32 font-mono text-xs"
-              value={bulk}
-              onChange={(e) => setBulk(e.target.value)}
-              placeholder={"DELA CRUZ, Juan, Mendoza\nSANTOS, Maria, Reyes"}
+      <Dialog open={pasting} onOpenChange={setPasting}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Paste class list</DialogTitle>
+            <DialogDescription>
+              One learner per line: <code>Last, First, Middle</code>, or cells copied from Excel (
+              <code>LRN · Last · First · Middle · Birthdate</code>).
+            </DialogDescription>
+          </DialogHeader>
+          <Textarea
+            autoFocus
+            className="h-40 font-mono text-xs"
+            value={bulk}
+            onChange={(e) => setBulk(e.target.value)}
+            placeholder={"Dela Cruz, Juan, Mendoza\nSantos, Maria, Reyes"}
+          />
+          <DialogFooter className="sm:justify-between">
+            <SimpleSelect
+              className="w-36"
+              value={bulkSex}
+              onValueChange={(v) => setBulkSex(v as Sex)}
+              options={[
+                { value: "M", label: "All male" },
+                { value: "F", label: "All female" },
+              ]}
             />
-            <div className="mt-3 flex items-center gap-2">
-              <SimpleSelect
-                className="w-36"
-                value={bulkSex}
-                onValueChange={(v) => setBulkSex(v as Sex)}
-                options={[
-                  { value: "M", label: "All male" },
-                  { value: "F", label: "All female" },
-                ]}
-              />
-              <Button
-                disabled={bulkParsed.length === 0}
-                onClick={() =>
-                  run(async () => {
-                    await addLearners(sectionId, bulkParsed);
-                    setBulk("");
-                  })
-                }
-              >
-                Add {bulkParsed.length || ""} learners
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+            <Button
+              disabled={bulkParsed.length === 0}
+              onClick={() =>
+                run(async () => {
+                  await addLearners(sectionId, bulkParsed);
+                  setBulk("");
+                  setPasting(false);
+                })
+              }
+            >
+              Add {bulkParsed.length || ""} learners
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={editing !== null} onOpenChange={(open) => !open && setEditing(null)}>
         <DialogContent>

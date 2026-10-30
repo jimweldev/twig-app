@@ -1,25 +1,26 @@
 import { useEffect, useState, type ReactNode } from "react";
 import type { LucideIcon } from "lucide-react";
-import {
-  ArrowRight,
-  Award,
-  CalendarRange,
-  Check,
-  ClipboardList,
-  FileInput,
-  Gamepad2,
-  NotebookPen,
-  Users,
-} from "lucide-react";
-import { useRouter, type Route } from "@/app/router";
+import { ArrowRight, CalendarRange, Check, ClipboardList, FileInput, Users } from "lucide-react";
+import { useRouter } from "@/app/router";
 import { useSchool } from "@/app/school";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { areasForGrade, gradeLabel, KINDER_RECORD } from "@/ecr/levels";
-import { listReceivedAreas } from "@/lib/db";
+import { TERMS } from "@/ecr/grading";
+import { gradeLabel, parseTerms } from "@/ecr/levels";
+import { listGradedTerms, listReceivedAreas } from "@/lib/db";
 
-function Stat({ icon: Icon, label, value, onClick }: { icon: LucideIcon; label: string; value: ReactNode; onClick?: () => void }) {
+function Stat({
+  icon: Icon,
+  label,
+  value,
+  onClick,
+}: {
+  icon: LucideIcon;
+  label: string;
+  value: ReactNode;
+  onClick?: () => void;
+}) {
   return (
     <Card
       className={`gap-0 py-4 ${onClick ? "cursor-pointer transition-colors hover:bg-muted/50" : ""}`}
@@ -47,40 +48,35 @@ export function DashboardPage() {
   const { navigate } = useRouter();
   const { profile, activeYear, sections, classes, onError } = useSchool();
   const [received, setReceived] = useState<{ section_id: number; learning_area: string }[]>([]);
+  const [graded, setGraded] = useState<Map<string, Set<number>>>(new Map());
+  const advisory = sections.find((s) => s.is_advisory);
 
   useEffect(() => {
     if (activeYear) listReceivedAreas(activeYear.id).then(setReceived, onError);
   }, [activeYear, onError]);
+  useEffect(() => {
+    if (advisory) listGradedTerms(advisory.id).then(setGraded, onError);
+  }, [advisory, onError]);
 
   const name = profile?.teacher_name.trim();
   const learners = sections.reduce((n, s) => n + s.learner_count, 0);
 
-  // Advisory class: which learning areas have grades, from this computer's class records or imported files.
-  const advisory = sections.find((s) => s.is_advisory);
-  const advisoryHas = (area: string) =>
-    !!advisory &&
-    (classes.some((c) => c.section_id === advisory.id && c.learning_area === area) ||
-      received.some((r) => r.section_id === advisory.id && r.learning_area === area));
-  // Standard learning areas for the grade, plus Senior High subjects the section actually has.
-  const standard = !advisory
-    ? []
-    : advisory.grade_level === 0
-      ? [KINDER_RECORD]
-      : areasForGrade(advisory.grade_level).map((a) => a.name);
-  const extra = advisory
+  // Advisory class: the subjects the section has (its class records and imported grades),
+  // and which of their terms have grades yet.
+  const subjects = advisory
     ? [
         ...classes.filter((c) => c.section_id === advisory.id).map((c) => c.learning_area),
         ...received.filter((r) => r.section_id === advisory.id).map((r) => r.learning_area),
-      ].filter((a, i, all) => !standard.includes(a) && all.indexOf(a) === i)
+      ].filter((a, i, all) => all.indexOf(a) === i)
     : [];
-  const advisoryAreas = [...standard, ...extra].map((area) => ({ area, ready: advisoryHas(area) }));
-  const done = advisoryAreas.filter((a) => a.ready).length;
-
-  const modules: { icon: LucideIcon; title: string; text: string; route: Route }[] = [
-    { icon: NotebookPen, title: "Lesson plans", text: "Daily lesson logs and plans", route: { page: "lessonPlans" } },
-    { icon: Award, title: "Certificates", text: "Awards and recognition", route: { page: "certificates" } },
-    { icon: Gamepad2, title: "Games", text: "Offline classroom games", route: { page: "games" } },
-  ];
+  const advisoryAreas = subjects.map((area) => {
+    // A class record says which terms the subject runs; imported-only subjects run all three.
+    const own = classes.find((c) => c.section_id === advisory?.id && c.learning_area === area);
+    const terms = own ? parseTerms(own.terms) : TERMS;
+    return { area, terms: terms.map((t) => ({ term: t, ready: !!graded.get(area)?.has(t) })) };
+  });
+  const allTerms = advisoryAreas.flatMap((a) => a.terms);
+  const done = allTerms.filter((t) => t.ready).length;
 
   return (
     <div className="mx-auto max-w-6xl p-8">
@@ -112,7 +108,12 @@ export function DashboardPage() {
       ) : (
         <>
           <div className="mt-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
-            <Stat icon={Users} label="Sections" value={sections.length} onClick={() => navigate({ page: "sections" })} />
+            <Stat
+              icon={Users}
+              label="Sections"
+              value={sections.length}
+              onClick={() => navigate({ page: "sections" })}
+            />
             <Stat icon={Users} label="Learners" value={learners} onClick={() => navigate({ page: "sections" })} />
             <Stat
               icon={ClipboardList}
@@ -196,28 +197,51 @@ export function DashboardPage() {
                     </button>{" "}
                     to import subject teachers' grade files.
                   </p>
+                ) : subjects.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">
+                    No subjects yet.{" "}
+                    <button
+                      type="button"
+                      className="font-medium text-primary hover:underline"
+                      onClick={() => navigate({ page: "classSection", sectionId: advisory.id })}
+                    >
+                      Add subjects
+                    </button>{" "}
+                    to this section in Class records.
+                  </p>
                 ) : (
                   <>
                     <div className="flex justify-between text-sm">
-                      <span>Learning areas with grades</span>
+                      <span>Terms with grades</span>
                       <span className="text-muted-foreground tabular-nums">
-                        {done} / {advisoryAreas.length}
+                        {done} / {allTerms.length}
                       </span>
                     </div>
                     <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-muted">
                       <div
                         className="h-full rounded-full bg-primary"
-                        style={{ width: `${advisoryAreas.length ? (done / advisoryAreas.length) * 100 : 0}%` }}
+                        style={{ width: `${allTerms.length ? (done / allTerms.length) * 100 : 0}%` }}
                       />
                     </div>
-                    <div className="mt-4 flex flex-wrap gap-1.5">
+                    <ul className="mt-4 divide-y text-sm">
                       {advisoryAreas.map((a) => (
-                        <Badge key={a.area} variant={a.ready ? "default" : "outline"}>
-                          {a.ready && <Check />}
-                          {a.area}
-                        </Badge>
+                        <li key={a.area} className="flex items-center justify-between gap-3 py-1.5">
+                          <span className="truncate font-medium">{a.area}</span>
+                          <span className="flex shrink-0 gap-1">
+                            {a.terms.map((t) => (
+                              <Badge
+                                key={t.term}
+                                variant={t.ready ? "default" : "outline"}
+                                className={t.ready ? undefined : "text-muted-foreground"}
+                                title={`Term ${t.term}: ${t.ready ? "has grades" : "no grades yet"}`}
+                              >
+                                {t.ready && <Check />}T{t.term}
+                              </Badge>
+                            ))}
+                          </span>
+                        </li>
                       ))}
-                    </div>
+                    </ul>
                   </>
                 )}
               </CardContent>
@@ -225,25 +249,6 @@ export function DashboardPage() {
           </div>
         </>
       )}
-
-      <h2 className="mt-8 text-sm font-semibold text-muted-foreground">Coming soon</h2>
-      <div className="mt-3 grid gap-4 sm:grid-cols-3">
-        {modules.map((m) => (
-          <Card
-            key={m.title}
-            className="cursor-pointer gap-0 py-4 transition-colors hover:bg-muted/50"
-            onClick={() => navigate(m.route)}
-          >
-            <CardContent className="flex items-center gap-3">
-              <m.icon className="size-5 text-muted-foreground" />
-              <div>
-                <div className="text-sm font-medium">{m.title}</div>
-                <div className="text-xs text-muted-foreground">{m.text}</div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
     </div>
   );
 }

@@ -82,3 +82,32 @@ export async function loadClassGrades(c: ClassRecord, learners: Learner[]): Prom
   const scoreMap = new Map(scores.map((s) => [scoreKey(s.activity_id, s.learner_id), s.score]));
   return classGrades(learners, acts, scoreMap, ctx);
 }
+
+/**
+ * A class record's grades with imported grades on top: an imported term grade
+ * replaces the teacher's own for that term, and the teacher's own grades fill the
+ * other terms. Numeric finals are recomputed from the merged terms.
+ */
+export function withImported(
+  own: Map<number, LearnerGrades>,
+  imported: Map<number, LearnerGrades>,
+  ctx: Pick<GradingContext, "mode" | "terms">,
+): Map<number, LearnerGrades> {
+  if (imported.size === 0) return own;
+  const ids = new Set([...own.keys(), ...imported.keys()]);
+  return new Map(
+    [...ids].map((id) => {
+      const mine = own.get(id);
+      const theirs = imported.get(id);
+      const terms = TERMS.map((t) => theirs?.terms[t - 1] ?? mine?.terms[t - 1] ?? null);
+      const final =
+        ctx.mode === "numeric"
+          ? finalGrade(
+              terms.map((g) => (typeof g === "number" ? g : null)),
+              ctx.terms,
+            )
+          : (theirs?.final ?? mine?.final ?? null);
+      return [id, { terms, final }];
+    }),
+  );
+}

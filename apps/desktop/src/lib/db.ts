@@ -1,6 +1,8 @@
 import { invoke } from "@tauri-apps/api/core";
 import Database from "@tauri-apps/plugin-sql";
+import { parseFields, type CertField, type CertKind, type Recipients } from "@/certificates/fields";
 import type { Component, Term } from "@/ecr/grading";
+import type { LessonPlan, PlanContent } from "@/lessons/plan";
 
 // Rust picks the database (twig-dev.db in development, twig.db in release
 // builds) and runs its migrations; ask it which one so the two never drift.
@@ -87,14 +89,18 @@ export interface Score {
 // ---- School profile ----
 
 export async function getProfile(): Promise<SchoolProfile> {
-  const rows = await (await db()).select<SchoolProfile[]>(
+  const rows = await (
+    await db()
+  ).select<SchoolProfile[]>(
     "SELECT region, division, district, school_name, school_id, teacher_name, school_head FROM school_profile WHERE id = 1",
   );
   return rows[0];
 }
 
 export async function saveProfile(p: SchoolProfile) {
-  await (await db()).execute(
+  await (
+    await db()
+  ).execute(
     `UPDATE school_profile SET region = $1, division = $2, district = $3,
        school_name = $4, school_id = $5, teacher_name = $6, school_head = $7 WHERE id = 1`,
     [p.region, p.division, p.district, p.school_name, p.school_id, p.teacher_name, p.school_head],
@@ -104,7 +110,9 @@ export async function saveProfile(p: SchoolProfile) {
 // ---- School years ----
 
 export async function listSchoolYears(): Promise<SchoolYear[]> {
-  const rows = await (await db()).select<(Omit<SchoolYear, "is_active"> & { is_active: number })[]>(
+  const rows = await (
+    await db()
+  ).select<(Omit<SchoolYear, "is_active"> & { is_active: number })[]>(
     `SELECT sy.id, sy.name, sy.start_date, sy.end_date, sy.is_active,
        (SELECT COUNT(*) FROM sections s WHERE s.school_year_id = sy.id) AS section_count
      FROM school_years sy ORDER BY sy.name DESC`,
@@ -126,10 +134,14 @@ export async function createSchoolYear(sy: SchoolYearInput): Promise<number> {
 }
 
 export async function updateSchoolYear(id: number, sy: SchoolYearInput) {
-  await (await db()).execute(
-    "UPDATE school_years SET name = $1, start_date = $2, end_date = $3 WHERE id = $4",
-    [sy.name, sy.start_date, sy.end_date, id],
-  );
+  await (
+    await db()
+  ).execute("UPDATE school_years SET name = $1, start_date = $2, end_date = $3 WHERE id = $4", [
+    sy.name,
+    sy.start_date,
+    sy.end_date,
+    id,
+  ]);
 }
 
 export async function setActiveSchoolYear(id: number) {
@@ -159,10 +171,7 @@ export async function deleteSchoolYear(id: number) {
        (SELECT l.id FROM learners l JOIN sections s ON s.id = l.section_id WHERE s.school_year_id = $1)`,
     [id],
   );
-  await d.execute(
-    "DELETE FROM learners WHERE section_id IN (SELECT id FROM sections WHERE school_year_id = $1)",
-    [id],
-  );
+  await d.execute("DELETE FROM learners WHERE section_id IN (SELECT id FROM sections WHERE school_year_id = $1)", [id]);
   await d.execute("DELETE FROM sections WHERE school_year_id = $1", [id]);
   await d.execute("DELETE FROM school_years WHERE id = $1", [id]);
   // Keep one active school year: fall back to the newest remaining.
@@ -176,7 +185,9 @@ export async function deleteSchoolYear(id: number) {
 // ---- Sections ----
 
 export async function listSections(schoolYearId: number): Promise<Section[]> {
-  const rows = await (await db()).select<(Omit<Section, "is_advisory"> & { is_advisory: number })[]>(
+  const rows = await (
+    await db()
+  ).select<(Omit<Section, "is_advisory"> & { is_advisory: number })[]>(
     `SELECT s.id, s.school_year_id, s.grade_level, s.name, s.adviser, s.is_advisory,
        (SELECT COUNT(*) FROM classes c WHERE c.section_id = s.id) AS class_count,
        (SELECT COUNT(*) FROM learners l WHERE l.section_id = s.id) AS learner_count
@@ -192,14 +203,15 @@ export type SectionInput = Pick<Section, "school_year_id" | "grade_level" | "nam
 /** A teacher has one advisory class per school year: marking one clears the others. */
 async function clearOtherAdvisory(s: SectionInput, exceptId: number) {
   if (!s.is_advisory) return;
-  await (await db()).execute(
-    "UPDATE sections SET is_advisory = 0 WHERE school_year_id = $1 AND id != $2",
-    [s.school_year_id, exceptId],
-  );
+  await (
+    await db()
+  ).execute("UPDATE sections SET is_advisory = 0 WHERE school_year_id = $1 AND id != $2", [s.school_year_id, exceptId]);
 }
 
 export async function createSection(s: SectionInput): Promise<number> {
-  const res = await (await db()).execute(
+  const res = await (
+    await db()
+  ).execute(
     "INSERT INTO sections (school_year_id, grade_level, name, adviser, is_advisory) VALUES ($1, $2, $3, $4, $5)",
     [s.school_year_id, s.grade_level, s.name, s.adviser, s.is_advisory ? 1 : 0],
   );
@@ -209,7 +221,9 @@ export async function createSection(s: SectionInput): Promise<number> {
 }
 
 export async function updateSection(id: number, s: SectionInput) {
-  await (await db()).execute(
+  await (
+    await db()
+  ).execute(
     `UPDATE sections SET school_year_id = $1, grade_level = $2, name = $3, adviser = $4, is_advisory = $5
      WHERE id = $6`,
     [s.school_year_id, s.grade_level, s.name, s.adviser, s.is_advisory ? 1 : 0, id],
@@ -223,15 +237,13 @@ export async function deleteSection(id: number) {
   await deleteClassesWhere("section_id = $1", [id]);
   await deleteReceivedWhere("section_id = $1", [id]);
   await d.execute("DELETE FROM section_subject_order WHERE section_id = $1", [id]);
-  await d.execute(
-    "DELETE FROM attendance_marks WHERE learner_id IN (SELECT id FROM learners WHERE section_id = $1)",
-    [id],
-  );
+  await d.execute("DELETE FROM attendance_marks WHERE learner_id IN (SELECT id FROM learners WHERE section_id = $1)", [
+    id,
+  ]);
   await d.execute("DELETE FROM attendance_no_class WHERE section_id = $1", [id]);
-  await d.execute(
-    "DELETE FROM observed_values WHERE learner_id IN (SELECT id FROM learners WHERE section_id = $1)",
-    [id],
-  );
+  await d.execute("DELETE FROM observed_values WHERE learner_id IN (SELECT id FROM learners WHERE section_id = $1)", [
+    id,
+  ]);
   await d.execute("DELETE FROM learners WHERE section_id = $1", [id]);
   await d.execute("DELETE FROM sections WHERE id = $1", [id]);
 }
@@ -257,10 +269,13 @@ export type ClassInput = Pick<ClassRecord, "section_id" | "learning_area"> &
   Partial<Pick<ClassRecord, "subject_type" | "terms">>;
 
 async function assertUniqueClass(c: ClassInput, exceptId = 0) {
-  const rows = await (await db()).select<{ id: number }[]>(
-    "SELECT id FROM classes WHERE section_id = $1 AND learning_area = $2 AND id != $3",
-    [c.section_id, c.learning_area, exceptId],
-  );
+  const rows = await (
+    await db()
+  ).select<{ id: number }[]>("SELECT id FROM classes WHERE section_id = $1 AND learning_area = $2 AND id != $3", [
+    c.section_id,
+    c.learning_area,
+    exceptId,
+  ]);
   if (rows.length) throw new Error(`This section already has a ${c.learning_area} class record.`);
 }
 
@@ -287,17 +302,24 @@ export async function createClass(c: ClassInput): Promise<number> {
 /** Scores belong to the section's learners, so a scored class can't change section. */
 export async function updateClass(id: number, c: ClassInput) {
   await assertUniqueClass(c, id);
-  const [{ n }] = await (await db()).select<{ n: number }[]>(
+  const [{ n }] = await (
+    await db()
+  ).select<{ n: number }[]>(
     `SELECT COUNT(*) AS n FROM scores s JOIN activities a ON a.id = s.activity_id
      JOIN classes c ON c.id = a.class_id
      WHERE a.class_id = $1 AND c.section_id != $2`,
     [id, c.section_id],
   );
   if (n > 0) throw new Error("This class record already has scores, so it can't move to another section.");
-  await (await db()).execute(
-    "UPDATE classes SET section_id = $1, learning_area = $2, subject_type = $3, terms = $4 WHERE id = $5",
-    [c.section_id, c.learning_area, c.subject_type ?? "", c.terms ?? "1,2,3", id],
-  );
+  await (
+    await db()
+  ).execute("UPDATE classes SET section_id = $1, learning_area = $2, subject_type = $3, terms = $4 WHERE id = $5", [
+    c.section_id,
+    c.learning_area,
+    c.subject_type ?? "",
+    c.terms ?? "1,2,3",
+    id,
+  ]);
 }
 
 export async function deleteClass(classId: number) {
@@ -343,7 +365,9 @@ export async function addLearners(sectionId: number, learners: NewLearner[]) {
 }
 
 export async function updateLearner(l: Learner) {
-  await (await db()).execute(
+  await (
+    await db()
+  ).execute(
     `UPDATE learners SET lrn = $1, last_name = $2, first_name = $3, middle_name = $4, sex = $5, birthdate = $6
      WHERE id = $7`,
     [l.lrn, l.last_name, l.first_name, l.middle_name, l.sex, l.birthdate, l.id],
@@ -363,10 +387,9 @@ export async function deleteLearner(learnerId: number) {
 
 /** Number of scores a learner has across all class records. */
 export async function countLearnerScores(learnerId: number): Promise<number> {
-  const [{ n }] = await (await db()).select<{ n: number }[]>(
-    "SELECT COUNT(*) AS n FROM scores WHERE learner_id = $1",
-    [learnerId],
-  );
+  const [{ n }] = await (
+    await db()
+  ).select<{ n: number }[]>("SELECT COUNT(*) AS n FROM scores WHERE learner_id = $1", [learnerId]);
   return n;
 }
 
@@ -380,11 +403,7 @@ export async function listActivities(classId: number): Promise<Activity[]> {
   );
 }
 
-export async function addActivity(
-  classId: number,
-  term: Term,
-  component: "WW" | "PT",
-): Promise<Activity> {
+export async function addActivity(classId: number, term: Term, component: "WW" | "PT"): Promise<Activity> {
   const d = await db();
   const [{ next }] = await d.select<{ next: number }[]>(
     `SELECT COALESCE(MAX(position), 0) + 1 AS next FROM activities
@@ -406,10 +425,7 @@ export async function addActivity(
 }
 
 export async function setHighestScore(activityId: number, hps: number) {
-  await (await db()).execute(
-    "UPDATE activities SET highest_score = $1 WHERE id = $2",
-    [hps, activityId],
-  );
+  await (await db()).execute("UPDATE activities SET highest_score = $1 WHERE id = $2", [hps, activityId]);
 }
 
 export async function deleteActivity(activityId: number) {
@@ -430,10 +446,7 @@ export async function listScores(classId: number): Promise<Score[]> {
 export async function setScore(activityId: number, learnerId: number, score: number | null) {
   const d = await db();
   if (score === null) {
-    await d.execute("DELETE FROM scores WHERE activity_id = $1 AND learner_id = $2", [
-      activityId,
-      learnerId,
-    ]);
+    await d.execute("DELETE FROM scores WHERE activity_id = $1 AND learner_id = $2", [activityId, learnerId]);
   } else {
     await d.execute(
       `INSERT INTO scores (activity_id, learner_id, score) VALUES ($1, $2, $3)
@@ -441,6 +454,127 @@ export async function setScore(activityId: number, learnerId: number, score: num
       [activityId, learnerId, score],
     );
   }
+}
+
+export interface ImportedActivity {
+  component: Component;
+  position: number;
+  highest_score: number;
+  /** Learner id → score. */
+  scores: Map<number, number>;
+}
+
+/**
+ * Replaces one term's activities and scores with imported ones. Each exam slot the
+ * class always has (ST1, ST2, TE) is kept, empty, when the import has none.
+ */
+export async function replaceTermScores(classId: number, term: Term, activities: ImportedActivity[]) {
+  const d = await db();
+  await d.execute(
+    "DELETE FROM scores WHERE activity_id IN (SELECT id FROM activities WHERE class_id = $1 AND term = $2)",
+    [classId, term],
+  );
+  await d.execute("DELETE FROM activities WHERE class_id = $1 AND term = $2", [classId, term]);
+  const exams = (["ST1", "ST2", "TE"] as const)
+    .filter((c) => !activities.some((a) => a.component === c))
+    .map((component): ImportedActivity => ({ component, position: 1, highest_score: 0, scores: new Map() }));
+  for (const a of [...activities, ...exams]) {
+    const res = await d.execute(
+      "INSERT INTO activities (class_id, term, component, position, highest_score) VALUES ($1, $2, $3, $4, $5)",
+      [classId, term, a.component, a.position, a.highest_score],
+    );
+    for (const [learnerId, score] of a.scores) {
+      await d.execute("INSERT INTO scores (activity_id, learner_id, score) VALUES ($1, $2, $3)", [
+        res.lastInsertId as number,
+        learnerId,
+        score,
+      ]);
+    }
+  }
+}
+
+/** Clears imported term grades that imported scores now replace; drops the import when nothing is left. */
+export async function clearReceivedTerms(sectionId: number, learningArea: string, terms: number[]) {
+  const d = await db();
+  const [row] = await d.select<{ id: number }[]>(
+    "SELECT id FROM received_grades WHERE section_id = $1 AND learning_area = $2",
+    [sectionId, learningArea],
+  );
+  if (!row) return;
+  const cols = terms.filter((t) => t >= 1 && t <= 3).map((t) => `term${t} = NULL`);
+  if (cols.length === 0) return;
+  await d.execute(`UPDATE received_grade_rows SET ${cols.join(", ")}, final = NULL WHERE received_id = $1`, [row.id]);
+  const [{ remaining }] = await d.select<{ remaining: number }[]>(
+    `SELECT COUNT(*) AS remaining FROM received_grade_rows
+     WHERE received_id = $1 AND (term1 IS NOT NULL OR term2 IS NOT NULL OR term3 IS NOT NULL)`,
+    [row.id],
+  );
+  if (remaining === 0) await deleteReceived(row.id);
+}
+
+/** What an import may change, saved first so the import can be undone. */
+export interface ImportSnapshot {
+  sectionId: number;
+  learningArea: string;
+  learnerIds: number[];
+  received: Omit<ReceivedInput, "terms"> | null;
+  classId?: number;
+  terms: { term: Term; activities: ImportedActivity[] }[];
+}
+
+export async function snapshotImport(
+  sectionId: number,
+  learningArea: string,
+  classId: number | undefined,
+  terms: Term[],
+): Promise<ImportSnapshot> {
+  const [learners, received] = await Promise.all([listLearners(sectionId), listReceived(sectionId)]);
+  const info = received.grades.find((g) => g.learning_area === learningArea);
+  const snapshot: ImportSnapshot = {
+    sectionId,
+    learningArea,
+    learnerIds: learners.map((l) => l.id),
+    received: info
+      ? {
+          section_id: sectionId,
+          learning_area: learningArea,
+          teacher_name: info.teacher_name,
+          exported_at: info.exported_at,
+          checksum: info.checksum,
+          rows: received.rows
+            .filter((r) => r.received_id === info.id)
+            .map((r) => ({ learner_id: r.learner_id, terms: [r.term1, r.term2, r.term3], final: r.final })),
+        }
+      : null,
+    classId,
+    terms: [],
+  };
+  if (classId !== undefined && terms.length > 0) {
+    const [acts, scores] = await Promise.all([listActivities(classId), listScores(classId)]);
+    snapshot.terms = terms.map((term) => ({
+      term,
+      activities: acts
+        .filter((a) => a.term === term)
+        .map((a) => ({
+          component: a.component,
+          position: a.position,
+          highest_score: a.highest_score,
+          scores: new Map(scores.filter((s) => s.activity_id === a.id).map((s) => [s.learner_id, s.score])),
+        })),
+    }));
+  }
+  return snapshot;
+}
+
+/** Puts back what an import changed, and removes learners it added. */
+export async function restoreImport(s: ImportSnapshot) {
+  if (s.classId !== undefined) {
+    for (const t of s.terms) await replaceTermScores(s.classId, t.term, t.activities);
+  }
+  await deleteReceivedWhere("section_id = $1 AND learning_area = $2", [s.sectionId, s.learningArea]);
+  if (s.received) await saveReceived({ ...s.received, terms: [1, 2, 3] });
+  const added = (await listLearners(s.sectionId)).filter((l) => !s.learnerIds.includes(l.id));
+  for (const l of added) await deleteLearner(l.id);
 }
 
 // ---- Received grades (imported .twig files) ----
@@ -489,25 +623,45 @@ export interface ReceivedInput {
   teacher_name: string;
   exported_at: string;
   checksum: string;
+  /** Terms (1-3) to write. Grades already imported for other terms are kept. */
+  terms: number[];
   rows: { learner_id: number; terms: (number | string | null)[]; final: number | string | null }[];
 }
 
-/** Stores imported grades, replacing any earlier file for the same learning area. */
+/**
+ * Stores imported grades for the chosen terms. Other terms already imported for the
+ * learning area stay; the final grade always comes from the newest import.
+ */
 export async function saveReceived(r: ReceivedInput) {
   const d = await db();
-  await deleteReceivedWhere("section_id = $1 AND learning_area = $2", [r.section_id, r.learning_area]);
-  const res = await d.execute(
-    `INSERT INTO received_grades (section_id, learning_area, teacher_name, exported_at, checksum)
-     VALUES ($1, $2, $3, $4, $5)`,
-    [r.section_id, r.learning_area, r.teacher_name, r.exported_at, r.checksum],
+  const [existing] = await d.select<{ id: number }[]>(
+    "SELECT id FROM received_grades WHERE section_id = $1 AND learning_area = $2",
+    [r.section_id, r.learning_area],
   );
-  const id = res.lastInsertId as number;
-  for (const row of r.rows) {
+  let id: number;
+  if (existing) {
+    id = existing.id;
     await d.execute(
-      `INSERT INTO received_grade_rows (received_id, learner_id, term1, term2, term3, final)
-       VALUES ($1, $2, $3, $4, $5, $6)`,
-      [id, row.learner_id, row.terms[0] ?? null, row.terms[1] ?? null, row.terms[2] ?? null, row.final],
+      `UPDATE received_grades SET teacher_name = $1, exported_at = $2, checksum = $3, imported_at = datetime('now')
+       WHERE id = $4`,
+      [r.teacher_name, r.exported_at, r.checksum, id],
     );
+  } else {
+    const res = await d.execute(
+      `INSERT INTO received_grades (section_id, learning_area, teacher_name, exported_at, checksum)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [r.section_id, r.learning_area, r.teacher_name, r.exported_at, r.checksum],
+    );
+    id = res.lastInsertId as number;
+  }
+
+  const columns = [...r.terms.filter((t) => t >= 1 && t <= 3).map((t) => `term${t}`), "final"];
+  const sql = `INSERT INTO received_grade_rows (received_id, learner_id, ${columns.join(", ")})
+     VALUES ($1, $2, ${columns.map((_, i) => `$${i + 3}`).join(", ")})
+     ON CONFLICT (received_id, learner_id) DO UPDATE SET ${columns.map((c) => `${c} = excluded.${c}`).join(", ")}`;
+  for (const row of r.rows) {
+    const values = r.terms.filter((t) => t >= 1 && t <= 3).map((t) => row.terms[t - 1] ?? null);
+    await d.execute(sql, [id, row.learner_id, ...values, row.final]);
   }
 }
 
@@ -522,6 +676,33 @@ async function deleteReceivedWhere(where: string, params: unknown[]) {
     params,
   );
   await d.execute(`DELETE FROM received_grades WHERE ${where}`, params);
+}
+
+/**
+ * The terms (1-3) of each learning area of a section that have at least one grade: a
+ * score or rating in this computer's class record, or an imported term grade.
+ */
+export async function listGradedTerms(sectionId: number): Promise<Map<string, Set<number>>> {
+  const rows = await (
+    await db()
+  ).select<{ learning_area: string; term: number }[]>(
+    `SELECT c.learning_area, a.term FROM classes c
+       JOIN activities a ON a.class_id = c.id JOIN scores s ON s.activity_id = a.id
+       WHERE c.section_id = $1
+     UNION
+     SELECT c.learning_area, r.term FROM classes c JOIN descriptive_ratings r ON r.class_id = c.id
+       WHERE c.section_id = $1 AND r.term BETWEEN 1 AND 3
+     UNION
+     SELECT g.learning_area, t.term FROM received_grades g
+       JOIN received_grade_rows r ON r.received_id = g.id
+       JOIN (SELECT 1 AS term UNION SELECT 2 UNION SELECT 3) t
+       WHERE g.section_id = $1
+         AND CASE t.term WHEN 1 THEN r.term1 WHEN 2 THEN r.term2 ELSE r.term3 END IS NOT NULL`,
+    [sectionId],
+  );
+  const terms = new Map<string, Set<number>>();
+  for (const r of rows) terms.set(r.learning_area, (terms.get(r.learning_area) ?? new Set()).add(r.term));
+  return terms;
 }
 
 /** Learning areas with imported grades, for every section in a school year. */
@@ -539,7 +720,9 @@ export async function listReceivedAreas(
 
 /** Saved learning-area order for a section; empty when never customized. */
 export async function getSubjectOrder(sectionId: number): Promise<string[]> {
-  const rows = await (await db()).select<{ learning_area: string }[]>(
+  const rows = await (
+    await db()
+  ).select<{ learning_area: string }[]>(
     "SELECT learning_area FROM section_subject_order WHERE section_id = $1 ORDER BY position",
     [sectionId],
   );
@@ -550,10 +733,11 @@ export async function saveSubjectOrder(sectionId: number, areas: string[]) {
   const d = await db();
   await d.execute("DELETE FROM section_subject_order WHERE section_id = $1", [sectionId]);
   for (const [i, area] of areas.entries()) {
-    await d.execute(
-      "INSERT INTO section_subject_order (section_id, learning_area, position) VALUES ($1, $2, $3)",
-      [sectionId, area, i],
-    );
+    await d.execute("INSERT INTO section_subject_order (section_id, learning_area, position) VALUES ($1, $2, $3)", [
+      sectionId,
+      area,
+      i,
+    ]);
   }
 }
 
@@ -568,15 +752,16 @@ export interface AttendanceMark {
 }
 
 export async function listNoClassDays(sectionId: number): Promise<string[]> {
-  const rows = await (await db()).select<{ date: string }[]>(
-    "SELECT date FROM attendance_no_class WHERE section_id = $1 ORDER BY date",
-    [sectionId],
-  );
+  const rows = await (
+    await db()
+  ).select<{ date: string }[]>("SELECT date FROM attendance_no_class WHERE section_id = $1 ORDER BY date", [sectionId]);
   return rows.map((r) => r.date);
 }
 
 export async function setNoClassDay(sectionId: number, date: string, noClass: boolean) {
-  await (await db()).execute(
+  await (
+    await db()
+  ).execute(
     noClass
       ? "INSERT OR IGNORE INTO attendance_no_class (section_id, date) VALUES ($1, $2)"
       : "DELETE FROM attendance_no_class WHERE section_id = $1 AND date = $2",
@@ -662,7 +847,13 @@ export async function listDescriptive(classId: number): Promise<DescriptiveRatin
 }
 
 /** null clears the rating. */
-export async function setDescriptive(classId: number, learnerId: number, term: number, item: string, code: string | null) {
+export async function setDescriptive(
+  classId: number,
+  learnerId: number,
+  term: number,
+  item: string,
+  code: string | null,
+) {
   const d = await db();
   if (code === null) {
     await d.execute(
@@ -676,4 +867,163 @@ export async function setDescriptive(classId: number, learnerId: number, term: n
       [classId, learnerId, term, item, code],
     );
   }
+}
+
+// ---- Certificates ----
+
+export interface CertificateTemplate {
+  id: number;
+  name: string;
+  /** data: URL of the uploaded design. */
+  image: string;
+  width: number;
+  height: number;
+  fields: CertField[];
+  /** Who gets one when printing. */
+  recipients: Recipients;
+  /** What the certificate is for. */
+  kind: CertKind;
+}
+
+type CertificateRow = Omit<CertificateTemplate, "fields"> & { fields: string };
+
+const parseCertificate = (r: CertificateRow): CertificateTemplate => ({ ...r, fields: parseFields(r.fields) });
+
+export async function listCertificateTemplates(): Promise<CertificateTemplate[]> {
+  const rows = await (
+    await db()
+  ).select<CertificateRow[]>(
+    "SELECT id, name, image, width, height, fields, recipients, kind FROM certificate_templates ORDER BY updated_at DESC, id DESC",
+  );
+  return rows.map(parseCertificate);
+}
+
+export async function getCertificateTemplate(id: number): Promise<CertificateTemplate | null> {
+  const [row] = await (
+    await db()
+  ).select<CertificateRow[]>(
+    "SELECT id, name, image, width, height, fields, recipients, kind FROM certificate_templates WHERE id = $1",
+    [id],
+  );
+  return row ? parseCertificate(row) : null;
+}
+
+export type CertificateImage = Pick<CertificateTemplate, "image" | "width" | "height">;
+
+export async function createCertificateTemplate(
+  name: string,
+  img: CertificateImage,
+  t: Pick<CertificateTemplate, "fields" | "recipients" | "kind">,
+): Promise<number> {
+  const res = await (
+    await db()
+  ).execute(
+    `INSERT INTO certificate_templates (name, image, width, height, fields, recipients, kind)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+    [name, img.image, img.width, img.height, JSON.stringify(t.fields), t.recipients, t.kind],
+  );
+  return res.lastInsertId as number;
+}
+
+export async function updateCertificateTemplate(
+  id: number,
+  t: Pick<CertificateTemplate, "name" | "fields" | "recipients" | "kind">,
+) {
+  await (
+    await db()
+  ).execute(
+    `UPDATE certificate_templates SET name = $1, fields = $2, recipients = $3, kind = $4, updated_at = datetime('now')
+     WHERE id = $5`,
+    [t.name, JSON.stringify(t.fields), t.recipients, t.kind, id],
+  );
+}
+
+/** Swaps the design; placed fields keep their positions. */
+export async function replaceCertificateImage(id: number, img: CertificateImage) {
+  await (
+    await db()
+  ).execute(
+    "UPDATE certificate_templates SET image = $1, width = $2, height = $3, updated_at = datetime('now') WHERE id = $4",
+    [img.image, img.width, img.height, id],
+  );
+}
+
+export async function deleteCertificateTemplate(id: number) {
+  await (await db()).execute("DELETE FROM certificate_templates WHERE id = $1", [id]);
+}
+
+// ---- Lesson plans ----
+
+type LessonPlanRow = Omit<LessonPlan, "content"> & { content: string };
+
+function parseLessonPlan(r: LessonPlanRow): LessonPlan {
+  let content: PlanContent = {};
+  try {
+    content = JSON.parse(r.content) as PlanContent;
+  } catch {
+    // A damaged row still opens, just empty.
+  }
+  return { ...r, content };
+}
+
+const LESSON_PLAN_SELECT =
+  "SELECT id, title, grade_level, learning_area, sections, term, week, sessions, minutes, content, updated_at FROM lesson_plans";
+
+export async function listLessonPlans(): Promise<LessonPlan[]> {
+  const rows = await (await db()).select<LessonPlanRow[]>(`${LESSON_PLAN_SELECT} ORDER BY updated_at DESC, id DESC`);
+  return rows.map(parseLessonPlan);
+}
+
+export async function getLessonPlan(id: number): Promise<LessonPlan | null> {
+  const [row] = await (await db()).select<LessonPlanRow[]>(`${LESSON_PLAN_SELECT} WHERE id = $1`, [id]);
+  return row ? parseLessonPlan(row) : null;
+}
+
+export type LessonPlanInput = Omit<LessonPlan, "id" | "updated_at">;
+
+export async function createLessonPlan(p: LessonPlanInput): Promise<number> {
+  const res = await (
+    await db()
+  ).execute(
+    `INSERT INTO lesson_plans (title, grade_level, learning_area, sections, term, week, sessions, minutes, content)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+    [
+      p.title,
+      p.grade_level,
+      p.learning_area,
+      p.sections,
+      p.term,
+      p.week,
+      p.sessions,
+      p.minutes,
+      JSON.stringify(p.content),
+    ],
+  );
+  return res.lastInsertId as number;
+}
+
+export async function updateLessonPlan(id: number, p: LessonPlanInput) {
+  await (
+    await db()
+  ).execute(
+    `UPDATE lesson_plans SET title = $1, grade_level = $2, learning_area = $3, sections = $4, term = $5, week = $6,
+       sessions = $7, minutes = $8, content = $9, updated_at = datetime('now')
+     WHERE id = $10`,
+    [
+      p.title,
+      p.grade_level,
+      p.learning_area,
+      p.sections,
+      p.term,
+      p.week,
+      p.sessions,
+      p.minutes,
+      JSON.stringify(p.content),
+      id,
+    ],
+  );
+}
+
+export async function deleteLessonPlan(id: number) {
+  await (await db()).execute("DELETE FROM lesson_plans WHERE id = $1", [id]);
 }

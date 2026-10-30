@@ -1,4 +1,4 @@
-import { Fragment } from "react";
+import { Fragment, type ReactNode } from "react";
 import { useSchool } from "@/app/school";
 import { Card } from "@/components/ui/card";
 import type { ClassRecord, Learner } from "@/lib/db";
@@ -31,9 +31,26 @@ export function DescriptiveLegend({ className = "" }: { className?: string }) {
 }
 
 /** Grades 1-3 under descriptive grading: one A-E rating per term, plus a final rating. */
-export function DescriptiveSheet({ classRecord, learners }: { classRecord: ClassRecord; learners: Learner[] }) {
+export function DescriptiveSheet({
+  classRecord,
+  learners,
+  imported,
+  importButton,
+}: {
+  classRecord: ClassRecord;
+  learners: Learner[];
+  /** Imported ratings; they replace the teacher's own for the terms imported. */
+  imported: Map<number, LearnerGrades>;
+  importButton: (shownTerm: null) => ReactNode;
+}) {
   const { onError } = useSchool();
-  const { loading, codeOf, setCode } = useDescriptiveRatings(classRecord.id, onError);
+  const { loading, codeOf: ownCodeOf, setCode } = useDescriptiveRatings(classRecord.id, onError);
+  const importedCode = (learnerId: number, t: number) => {
+    const g = imported.get(learnerId);
+    const code = t === 4 ? g?.final : g?.terms[t - 1];
+    return typeof code === "string" ? code : null;
+  };
+  const codeOf = (learnerId: number, t: number) => importedCode(learnerId, t) ?? ownCodeOf(learnerId, t);
 
   const grades = new Map<number, LearnerGrades>(
     learners.map((l) => [l.id, { terms: TERMS.map((t) => codeOf(l.id, t)), final: codeOf(l.id, 4) }]),
@@ -48,7 +65,16 @@ export function DescriptiveSheet({ classRecord, learners }: { classRecord: Class
     <div className="flex h-full flex-col">
       <div className="flex items-center justify-between gap-4 border-b bg-background px-6 py-2">
         <DescriptiveLegend />
-        <ExportGradesDialog classRecord={classRecord} learners={learners} grades={grades} terms={TERMS} onError={onError} />
+        <div className="flex gap-2">
+          {importButton(null)}
+          <ExportGradesDialog
+            classRecord={classRecord}
+            learners={learners}
+            grades={grades}
+            terms={TERMS}
+            onError={onError}
+          />
+        </div>
       </div>
       <div className="min-h-0 flex-1 overflow-auto p-6">
         <p className="mb-4 max-w-3xl text-sm text-muted-foreground">
@@ -85,9 +111,15 @@ export function DescriptiveSheet({ classRecord, learners }: { classRecord: Class
                           <td className="border border-stone-200 px-2 whitespace-nowrap">{displayName(l)}</td>
                           {columns.map(([t]) => {
                             const code = codeOf(l.id, t);
+                            const fromImport = importedCode(l.id, t) !== null;
                             return (
-                              <td key={t} className={`border border-stone-200 p-0 ${code ? DESCRIPTIVE_COLORS[code] : ""}`}>
+                              <td
+                                key={t}
+                                title={fromImport ? "Imported. Remove the imported grades to edit it." : undefined}
+                                className={`border border-stone-200 p-0 ${code ? DESCRIPTIVE_COLORS[code] : ""} ${fromImport ? "italic" : ""}`}
+                              >
                                 <select
+                                  disabled={fromImport}
                                   aria-label={`${displayName(l)} ${t === 4 ? "final" : `term ${t}`}`}
                                   value={code ?? ""}
                                   onChange={(e) => setCode(l.id, t, "", e.target.value || null)}

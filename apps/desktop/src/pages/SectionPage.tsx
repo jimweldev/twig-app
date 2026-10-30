@@ -11,8 +11,8 @@ import {
   type SchoolYear,
   type Section,
 } from "@/lib/db";
-import { ImportGradesDialog } from "@/ecr/ImportGradesDialog";
 import { SectionGrades } from "@/ecr/SectionGrades";
+import { ImportLearnersDialog, SendLearnersDialog } from "./LearnerListTransfer";
 import { SectionLearners } from "./SectionLearners";
 import { gradeLabel } from "@/ecr/levels";
 
@@ -72,20 +72,18 @@ export function SectionPage({
           .filter(Boolean)
           .join(" · ")}
         actions={
-          section.is_advisory && (
-            <ImportGradesDialog
+          <div className="flex gap-2">
+            <ImportLearnersDialog
               schoolYear={schoolYear}
               section={section}
               learners={learners}
-              received={received.grades}
-              localClasses={localClasses}
               onImported={async () => {
                 await reloadAll();
-                setTab("grades");
+                setTab("learners");
               }}
-              onError={onError}
             />
-          )
+            <SendLearnersDialog schoolYear={schoolYear} section={section} learners={learners} />
+          </div>
         }
       />
       <Tabs value={tab} onValueChange={(v) => setTab(v as Tab)} className="mt-6">

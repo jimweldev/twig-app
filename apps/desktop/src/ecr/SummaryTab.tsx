@@ -9,9 +9,9 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import type { Activity, Learner } from "@/lib/db";
+import type { Learner } from "@/lib/db";
 import { PASSING_GRADE } from "@/ecr/grading";
-import { classGrades, type GradingContext } from "./classGrades";
+import type { GradingContext, LearnerGrades } from "./classGrades";
 import { displayName } from "@/lib/names";
 import { DescriptorBadge, DescriptorLegend } from "./DescriptorLegend";
 
@@ -28,16 +28,14 @@ function Stat({ label, children }: { label: string; children: React.ReactNode })
 
 export function SummaryTab({
   learners,
-  activities,
-  scores,
+  grades,
   ctx,
 }: {
   learners: Learner[];
-  activities: Activity[];
-  scores: Map<string, number>;
+  /** Term and final grades, imported grades included. */
+  grades: Map<number, LearnerGrades>;
   ctx: GradingContext;
 }) {
-  const grades = classGrades(learners, activities, scores, ctx);
   // Numeric records only, so grades are numbers or null.
   const rows = learners.map((l) => {
     const g = grades.get(l.id)!;

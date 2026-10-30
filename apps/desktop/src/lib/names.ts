@@ -1,9 +1,19 @@
 import type { Learner, NewLearner, Sex } from "@/lib/db";
 
-/** "DELA CRUZ, Juan M." — DepEd class list order is last name first. */
+/**
+ * "DELA CRUZ" or "dela cruz" -> "Dela Cruz". Names typed with their own mix of
+ * capitals ("McDonald", "dela Cruz") are kept as typed.
+ */
+export function properCase(name: string) {
+  const t = name.trim();
+  if (t !== t.toUpperCase() && t !== t.toLowerCase()) return t;
+  return t.toLowerCase().replace(/(^|[\s'-])(\p{L})/gu, (_, sep: string, ch: string) => sep + ch.toUpperCase());
+}
+
+/** "Dela Cruz, Juan M." — DepEd class list order is last name first. */
 export function displayName(l: Pick<Learner, "last_name" | "first_name" | "middle_name">) {
   const mi = l.middle_name.trim() ? ` ${l.middle_name.trim()[0].toUpperCase()}.` : "";
-  return `${l.last_name.toUpperCase()}, ${l.first_name}${mi}`;
+  return `${properCase(l.last_name)}, ${l.first_name}${mi}`;
 }
 
 const isLrn = (s: string) => /^\d{12}$/.test(s.trim());
@@ -30,7 +40,15 @@ export function parseLearnerLine(line: string, sex: Sex): NewLearner | null {
   if (birthdate) cells = cells.slice(0, -1);
   const [last_name = "", first_name = "", middle_name = ""] = cells;
   if (!last_name || !first_name) return null;
-  return { lrn, last_name, first_name, middle_name, sex, birthdate };
+  // Class lists often come in all capitals; store them the way they are shown.
+  return {
+    lrn,
+    last_name: properCase(last_name),
+    first_name: properCase(first_name),
+    middle_name: properCase(middle_name),
+    sex,
+    birthdate,
+  };
 }
 
 export function currentSchoolYear(now = new Date()) {

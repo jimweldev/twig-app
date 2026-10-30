@@ -17,10 +17,8 @@ import {
   SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
-  SidebarGroupLabel,
   SidebarHeader,
   SidebarMenu,
-  SidebarMenuBadge,
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarRail,
@@ -34,7 +32,6 @@ interface NavItem {
   route: Route;
   /** Routes that keep this item highlighted. */
   pages: Route["page"][];
-  soon?: boolean;
 }
 
 const MAIN: NavItem[] = [
@@ -49,12 +46,9 @@ const MAIN: NavItem[] = [
   },
   { label: "Attendance", icon: CalendarCheck, route: { page: "attendance" }, pages: ["attendance"] },
   { label: "Report cards", icon: FileText, route: { page: "reportCards" }, pages: ["reportCards"] },
-];
-
-const LATER: NavItem[] = [
-  { label: "Lesson plans", icon: NotebookPen, route: { page: "lessonPlans" }, pages: ["lessonPlans"], soon: true },
-  { label: "Certificates", icon: Award, route: { page: "certificates" }, pages: ["certificates"], soon: true },
-  { label: "Games", icon: Gamepad2, route: { page: "games" }, pages: ["games"], soon: true },
+  { label: "Lesson plans", icon: NotebookPen, route: { page: "lessonPlans" }, pages: ["lessonPlans", "lessonPlan"] },
+  { label: "Certificates", icon: Award, route: { page: "certificates" }, pages: ["certificates", "certificate"] },
+  { label: "Games", icon: Gamepad2, route: { page: "games" }, pages: ["games", "game"] },
 ];
 
 export function AppSidebar() {
@@ -72,7 +66,6 @@ export function AppSidebar() {
           <item.icon />
           <span>{item.label}</span>
         </SidebarMenuButton>
-        {item.soon && <SidebarMenuBadge className="text-[10px] text-muted-foreground">Soon</SidebarMenuBadge>}
       </SidebarMenuItem>
     ));
 
@@ -110,12 +103,6 @@ export function AppSidebar() {
         <SidebarGroup>
           <SidebarGroupContent>
             <SidebarMenu>{renderItems(MAIN)}</SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-        <SidebarGroup>
-          <SidebarGroupLabel>Coming soon</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>{renderItems(LATER)}</SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>

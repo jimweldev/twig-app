@@ -1,5 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { ageOn, currentSchoolYear, isValidSchoolYear, normalizeDate, parseLearnerLine, suggestSchoolYear } from "@/lib/names";
+import {
+  ageOn,
+  currentSchoolYear,
+  displayName,
+  isValidSchoolYear,
+  normalizeDate,
+  parseLearnerLine,
+  properCase,
+  suggestSchoolYear,
+} from "@/lib/names";
 
 describe("school years", () => {
   it("validates consecutive years", () => {
@@ -21,13 +30,13 @@ describe("school years", () => {
 describe("parseLearnerLine", () => {
   it("parses comma and tab formats", () => {
     expect(parseLearnerLine("DELA CRUZ, Juan, Mendoza", "M")).toMatchObject({
-      last_name: "DELA CRUZ",
+      last_name: "Dela Cruz",
       first_name: "Juan",
       middle_name: "Mendoza",
     });
     expect(parseLearnerLine("123456789012\tSANTOS\tMaria\tReyes", "F")).toMatchObject({
       lrn: "123456789012",
-      last_name: "SANTOS",
+      last_name: "Santos",
       sex: "F",
     });
     expect(parseLearnerLine("OnlyOneName", "M")).toBeNull();
@@ -53,6 +62,36 @@ describe("birthdates", () => {
     expect(parseLearnerLine("123456789012\tSANTOS\tMaria\tReyes\t3/9/2014", "F")).toMatchObject({
       middle_name: "Reyes",
       birthdate: "2014-03-09",
+    });
+  });
+});
+
+describe("proper case last names", () => {
+  it("re-cases all-caps and all-lowercase names", () => {
+    expect(properCase("DELA CRUZ")).toBe("Dela Cruz");
+    expect(properCase("santos-reyes")).toBe("Santos-Reyes");
+    expect(properCase("O'NEIL")).toBe("O'Neil");
+    expect(properCase("ÑANO")).toBe("Ñano");
+  });
+
+  it("keeps names typed with their own capitals", () => {
+    expect(properCase("McDonald")).toBe("McDonald");
+    expect(properCase("dela Cruz")).toBe("dela Cruz");
+  });
+
+  it("shows the class list name in proper case", () => {
+    expect(displayName({ last_name: "AQUINO", first_name: "Carlos", middle_name: "Bautista" })).toBe(
+      "Aquino, Carlos B.",
+    );
+  });
+});
+
+describe("pasted class lists", () => {
+  it("stores all-caps names in proper case", () => {
+    expect(parseLearnerLine("DELA CRUZ\tJUAN MIGUEL\tMENDOZA", "M")).toMatchObject({
+      last_name: "Dela Cruz",
+      first_name: "Juan Miguel",
+      middle_name: "Mendoza",
     });
   });
 });

@@ -8,7 +8,7 @@ import {
   type ReceivedGrade,
   type Section,
 } from "@/lib/db";
-import { loadClassGrades, type GradeValue, type LearnerGrades } from "./classGrades";
+import { gradingContext, loadClassGrades, withImported, type GradeValue, type LearnerGrades } from "./classGrades";
 import { orderedAreas, PASSING_GRADE } from "./grading";
 import { gradingModeFor } from "./levels";
 
@@ -19,7 +19,8 @@ export type AreaSource =
 
 /**
  * A section's grades in every learning area, in the section's subject order.
- * This computer's class records win over imported grade files.
+ * This computer's class records win over imported grade files; imported grades fill
+ * the terms a class record has no grades for.
  */
 export function useSectionGrades(
   section: Section,
@@ -43,24 +44,28 @@ export function useSectionGrades(
           localClasses
             // Kindergarten is one integrated record, not a learning area.
             .filter((c) => gradingModeFor(c.grade_level, c.school_year) !== "kinder")
-            .map(async (c) => [c.learning_area, await loadClassGrades(c, learners), c.subject_type] as const),
+            .map(async (c) => [c.learning_area, await loadClassGrades(c, learners), c] as const),
         ),
       ]);
-      const localByArea = new Map(local.map(([area, grades, subjectType]) => [area, { grades, subjectType }]));
+      const importedGrades = (info: ReceivedGrade) =>
+        new Map(
+          received.rows
+            .filter((r) => r.received_id === info.id)
+            .map((r) => [r.learner_id, { terms: [r.term1, r.term2, r.term3], final: r.final }]),
+        );
+      const localByArea = new Map(local.map(([area, grades, c]) => [area, { grades, c }]));
       // Senior High subjects aren't in the standard list; include whatever the section has.
       const present = [...local.map(([area]) => area), ...received.grades.map((g) => g.learning_area)];
       setAreas(
         orderedAreas(section.grade_level, order, present).map((area): AreaSource => {
           const mine = localByArea.get(area);
-          if (mine) return { area, kind: "local", grades: mine.grades, subjectType: mine.subjectType };
           const info = received.grades.find((r) => r.learning_area === area);
+          if (mine) {
+            const grades = info ? withImported(mine.grades, importedGrades(info), gradingContext(mine.c)) : mine.grades;
+            return { area, kind: "local", grades, subjectType: mine.c.subject_type };
+          }
           if (!info) return { area, kind: "missing", grades: new Map() };
-          const grades = new Map(
-            received.rows
-              .filter((r) => r.received_id === info.id)
-              .map((r) => [r.learner_id, { terms: [r.term1, r.term2, r.term3], final: r.final }]),
-          );
-          return { area, kind: "received", info, grades };
+          return { area, kind: "received", info, grades: importedGrades(info) };
         }),
       );
     } catch (e) {
@@ -102,10 +107,23 @@ export function gradeIn(source: AreaSource, learnerId: number, period: 0 | 1 | 2
 
 /** General average: mean of all final grades, only when every area has a numeric one. */
 export function generalAverage(areas: AreaSource[], learnerId: number): number | null {
-  if (areas.length === 0) return null;
-  const finals = areas.map((a) => gradeIn(a, learnerId, "final"));
-  if (finals.some((g) => typeof g !== "number")) return null;
-  return Math.round((finals as number[]).reduce((a, b) => a + b, 0) / finals.length);
+  return averageIn(areas, learnerId, "final");
+}
+
+/**
+ * Mean grade for a term (0-2) or the final, rounded like the report card. Every area
+ * needs a numeric grade unless `skipEmpty` (a Senior High subject may not run every term).
+ */
+export function averageIn(
+  areas: AreaSource[],
+  learnerId: number,
+  period: 0 | 1 | 2 | "final",
+  skipEmpty = false,
+): number | null {
+  const all = areas.map((a) => gradeIn(a, learnerId, period));
+  const grades = skipEmpty ? all.filter((g) => typeof g === "number") : all;
+  if (grades.length === 0 || grades.some((g) => typeof g !== "number")) return null;
+  return Math.round((grades as number[]).reduce((a, b) => a + b, 0) / grades.length);
 }
 
 export const isPassing = (g: GradeValue) => typeof g === "number" && g >= PASSING_GRADE;

@@ -9,6 +9,7 @@ import {
   type SchoolYear,
   type Section,
 } from "@/lib/db";
+import { undoUnkeptImport } from "@/ecr/pendingImport";
 
 interface SchoolValue {
   loaded: boolean;
@@ -43,9 +44,7 @@ export function SchoolProvider({ children }: { children: ReactNode }) {
     try {
       const [p, years] = await Promise.all([getProfile(), listSchoolYears()]);
       const active = years.find((y) => y.is_active);
-      const [s, c] = active
-        ? await Promise.all([listSections(active.id), listClasses(active.id)])
-        : [[], []];
+      const [s, c] = active ? await Promise.all([listSections(active.id), listClasses(active.id)]) : [[], []];
       setProfile(p);
       setSchoolYears(years);
       setSections(s);
@@ -58,8 +57,9 @@ export function SchoolProvider({ children }: { children: ReactNode }) {
   }, [onError]);
 
   useEffect(() => {
-    refresh();
-  }, [refresh]);
+    // An import left unkept when TWIG last closed is undone before anything loads.
+    undoUnkeptImport().catch(onError).finally(refresh);
+  }, [refresh, onError]);
 
   return (
     <SchoolContext.Provider

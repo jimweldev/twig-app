@@ -1,7 +1,7 @@
 import { useEffect, useState, type KeyboardEvent } from "react";
 import { scoreKey, type Activity, type Learner } from "@/lib/db";
 import { computeTerm, PASSING_GRADE, type Component, type Term } from "@/ecr/grading";
-import type { GradingContext } from "./classGrades";
+import type { GradingContext, LearnerGrades } from "./classGrades";
 import { displayName } from "@/lib/names";
 import { DescriptorLegend } from "./DescriptorLegend";
 import { Plus } from "lucide-react";
@@ -21,7 +21,7 @@ const EXAMS: [Component, string][] = [
  * the cell when the whole value is selected or the caret is at that edge,
  * so they still move the caret while editing.
  */
-function moveFocus(e: KeyboardEvent<HTMLInputElement>, row: number, col: number) {
+export function moveFocus(e: KeyboardEvent<HTMLInputElement>, row: number, col: number) {
   const input = e.currentTarget;
   const { selectionStart: start, selectionEnd: end, value } = input;
   const allSelected = start === 0 && end === value.length;
@@ -98,6 +98,7 @@ export function TermSheet({
   activities,
   scores,
   ctx,
+  imported,
   onScore,
   onHps,
   onAddActivity,
@@ -108,6 +109,8 @@ export function TermSheet({
   activities: Activity[];
   scores: Map<string, number>;
   ctx: GradingContext;
+  /** Imported grades; an imported term grade replaces the one computed from scores. */
+  imported: Map<number, LearnerGrades>;
   onScore: (activityId: number, learnerId: number, score: number | null) => void;
   onHps: (activityId: number, hps: number) => void;
   onAddActivity: (component: "WW" | "PT") => void;
@@ -197,7 +200,10 @@ export function TermSheet({
         />
       </td>
     );
-    const failing = result && result.termGrade < PASSING_GRADE;
+    const importedGrade = imported.get(l.id)?.terms[term - 1];
+    const fromImport = typeof importedGrade === "number";
+    const termGrade = fromImport ? importedGrade : (result?.termGrade ?? null);
+    const failing = termGrade !== null && termGrade < PASSING_GRADE;
     return (
       <tr key={l.id} className="hover:bg-emerald-50/40">
         <td className="sticky left-0 z-10 border border-stone-200 bg-white px-1.5 text-right text-stone-400">
@@ -223,7 +229,16 @@ export function TermSheet({
             failing ? "bg-red-50 text-red-700" : "bg-emerald-50 text-emerald-900"
           }`}
         >
-          {result?.termGrade ?? ""}
+          {fromImport ? (
+            <span
+              className="italic"
+              title={`Imported grade${result ? `. Your scores give ${result.termGrade}.` : ""}`}
+            >
+              {termGrade}
+            </span>
+          ) : (
+            (termGrade ?? "")
+          )}
         </td>
       </tr>
     );
