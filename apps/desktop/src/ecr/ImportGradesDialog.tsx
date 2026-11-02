@@ -210,7 +210,8 @@ export function ImportGradesDialog({
       !areasForGrade(section.grade_level).some((a) => a.name === p.learning_area)
     )
       blockers.push(`${p.learning_area} is not a learning area for ${gradeLabel(section.grade_level)}.`);
-    if (p.learning_area !== area) warnings.push(`Different subject: ${p.learning_area} → ${area}`);
+    if (p.learning_area !== area)
+      warnings.push(`Different subject: the file is ${p.learning_area}, this record is ${area}`);
     if (p.section.trim().toLowerCase() !== section.name.trim().toLowerCase())
       warnings.push(`Different section: ${p.section} → ${section.name}`);
 
@@ -229,6 +230,9 @@ export function ImportGradesDialog({
         .map((from) => ({ from, to: targets[from] ?? 0 }))
         .filter((x) => x.to > 0)
     : [];
+  // A one-term file defaults to the term tab open here, which may not be the file's term.
+  for (const x of pairs)
+    if (x.from !== x.to) warnings.push(`Different term: the file's Term ${x.from} goes into your Term ${x.to}`);
   const clash = new Set(pairs.map((x) => x.to)).size !== pairs.length;
   const intoLocked = pairs.filter((x) => lockedTerms.includes(x.to)).map((x) => x.to);
   const hasOwnRecord = localClasses.some((c) => c.learning_area === area);
@@ -512,8 +516,8 @@ export function ImportGradesDialog({
                         </li>
                       ))}
                       {warnings.map((w) => (
-                        <li key={w} className="flex items-center gap-2 text-amber-800">
-                          <TriangleAlert className="size-4 shrink-0" /> {w}
+                        <li key={w} className="flex items-start gap-2 rounded-md bg-amber-50 p-2 text-amber-800">
+                          <TriangleAlert className="mt-0.5 size-4 shrink-0" /> {w}
                         </li>
                       ))}
                       {intoLocked.length > 0 && (
