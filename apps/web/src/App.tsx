@@ -3,11 +3,13 @@ import { formatSize, RELEASES_URL, REPO, useLatestRelease } from "./useLatestRel
 
 function Logo({ className = "size-9" }: { className?: string }) {
   return (
-    <svg viewBox="0 0 48 48" className={className} aria-hidden="true">
-      <rect width="48" height="48" rx="12" fill="#047857" />
-      <path d="M14 40 C20 30 26 22 36 10" stroke="#ecfdf5" strokeWidth="3.2" strokeLinecap="round" fill="none" />
-      <path d="M22 28 C14 26 10 19 11 12 C18 13 23 19 22 28 Z" fill="#a7f3d0" />
-      <path d="M28 20 C30 13 36 9 42 10 C41 17 35 21 28 20 Z" fill="#6ee7b7" />
+    <svg viewBox="0 0 256 256" className={className} aria-hidden="true">
+      <rect width="256" height="256" rx="58" fill="#047857" />
+      <g fill="#ffffff" transform="translate(27.4 30.3) scale(0.74)">
+        <path d="M104 178 Q101 110 118 42 Q128 32 137 42 Q140 110 138 174 Q140 202 168 204 Q186 206 196 196 Q194 228 160 232 Q106 232 104 178 Z" />
+        <path d="M122 92 Q96 86 68 84 Q56 90 68 98 Q96 102 120 110 Z" />
+        <path d="M132 112 A64 64 0 0 1 216 52 A64 64 0 0 1 132 112 Z" />
+      </g>
     </svg>
   );
 }
@@ -20,9 +22,23 @@ function WindowsIcon() {
   );
 }
 
+function AppleIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="size-5" fill="currentColor" aria-hidden="true">
+      <path d="M16.4 12.6c0-2.4 2-3.6 2.1-3.7-1.2-1.7-3-1.9-3.6-2-1.5-.2-3 .9-3.8.9-.8 0-2-.9-3.3-.9-1.7 0-3.3 1-4.2 2.5-1.8 3.1-.5 7.7 1.3 10.2.9 1.2 1.9 2.6 3.2 2.6 1.3-.1 1.8-.8 3.3-.8 1.6 0 2 .8 3.3.8 1.4 0 2.3-1.3 3.1-2.5 1-1.4 1.4-2.8 1.4-2.9 0 0-2.8-1.1-2.8-4.2zM13.9 5.2c.7-.9 1.2-2 1-3.2-1 0-2.3.7-3 1.6-.7.8-1.2 2-1.1 3.1 1.2.1 2.3-.6 3.1-1.5z" />
+    </svg>
+  );
+}
+
+/** Mac visitors get the Mac download first, everyone else the Windows one. */
+const onMac = typeof navigator !== "undefined" && /Mac/i.test(navigator.userAgent);
+
 function DownloadButton({ large = false }: { large?: boolean }) {
   const { release, status } = useLatestRelease();
-  const href = release?.installer?.url ?? RELEASES_URL;
+  const mac = onMac && !!release?.mac;
+  const href = (mac ? release?.mac?.url : release?.installer?.url) ?? RELEASES_URL;
+  const size = mac ? release?.mac?.size : release?.installer?.size;
+  const other = mac ? release?.installer : release?.mac;
   const pad = large ? "px-6 py-3.5 text-base" : "px-4 py-2.5 text-sm";
 
   return (
@@ -31,8 +47,8 @@ function DownloadButton({ large = false }: { large?: boolean }) {
         href={href}
         className={`inline-flex items-center gap-2.5 rounded-xl bg-emerald-700 font-semibold text-white shadow-lg shadow-emerald-900/20 transition hover:bg-emerald-800 ${pad}`}
       >
-        <WindowsIcon />
-        Download for Windows
+        {mac ? <AppleIcon /> : <WindowsIcon />}
+        Download for {mac ? "Mac" : "Windows"}
       </a>
       {large && (
         <p className="text-sm text-stone-500">
@@ -40,18 +56,15 @@ function DownloadButton({ large = false }: { large?: boolean }) {
           {status === "ready" && release && (
             <>
               Version {release.version}
-              {release.installer && ` · ${formatSize(release.installer.size)}`} · Windows 10 and 11 ·{" "}
-              {release.mac && (
+              {size && ` · ${formatSize(size)}`} · {mac ? "macOS 11 or later" : "Windows 10 and 11"}
+              {other && (
                 <>
-                  <a href={release.mac.url} className="underline hover:text-stone-800">
-                    Mac version
-                  </a>{" "}
-                  ·{" "}
+                  {" · "}
+                  <a href={other.url} className="underline hover:text-stone-800">
+                    {mac ? "Windows" : "Mac"} version
+                  </a>
                 </>
               )}
-              <a href={RELEASES_URL} className="underline hover:text-stone-800">
-                all releases
-              </a>
             </>
           )}
           {status === "none" && (
@@ -120,10 +133,12 @@ function ClassRecordPreview() {
   );
 }
 
-const FEATURES: { title: string; text: string; icon: ReactNode }[] = [
+type Feature = { title: string; text: string; icon: ReactNode };
+
+const CLASS_FEATURES: Feature[] = [
   {
     title: "E-class record",
-    text: "Three-term class records with DO 015, s. 2026 weights, ST1/ST2/term exam, and the adjusted transmutation table. Grades compute as you type.",
+    text: "Three-term class records with DO 015, s. 2026 weights, ST1/ST2/term exam, and the adjusted transmutation table. MAPEH keeps each part's own grades. Paste scores straight from Excel; grades compute as you type.",
     icon: "📒",
   },
   {
@@ -153,6 +168,45 @@ const FEATURES: { title: string; text: string; icon: ReactNode }[] = [
   },
 ];
 
+const TEACHING_FEATURES: Feature[] = [
+  {
+    title: "ILAW lesson plans",
+    text: "Lesson plans in the DO 16, s. 2026 format. Let ChatGPT draft the parts, review and edit them, then download a PDF with your school's logos in the footer.",
+    icon: "📝",
+  },
+  {
+    title: "Quizzes and tests",
+    text: "Make a quiz from a lesson plan: multiple choice, true or false, identification, matching, enumeration and essay. Download the test paper and its answer key as PDFs.",
+    icon: "✅",
+  },
+  {
+    title: "Certificates",
+    text: "Upload your certificate design, place the learner's name, award and grades on it, and print one for every learner at once.",
+    icon: "🏅",
+  },
+  {
+    title: "Classroom games",
+    text: "Round 'Em Up picks a learner at random; Squad Up shuffles the class into balanced groups, with leaders if you like. Both run offline.",
+    icon: "🎲",
+  },
+];
+
+function FeatureGrid({ features }: { features: Feature[] }) {
+  return (
+    <div className={`mt-6 grid gap-5 sm:grid-cols-2 ${features.length === 4 ? "lg:grid-cols-4" : "lg:grid-cols-3"}`}>
+      {features.map((f) => (
+        <div key={f.title} className="rounded-2xl border border-stone-200 bg-white p-6">
+          <div className="text-2xl" aria-hidden="true">
+            {f.icon}
+          </div>
+          <h3 className="mt-3 font-semibold text-stone-900">{f.title}</h3>
+          <p className="mt-1.5 text-sm leading-relaxed text-stone-600">{f.text}</p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 const FAQ: [string, ReactNode][] = [
   [
     "Is TWIG an official DepEd app?",
@@ -173,6 +227,14 @@ const FAQ: [string, ReactNode][] = [
       </code>{" "}
       on a Mac. Copy that file to a USB drive now and then as a backup.
     </>,
+  ],
+  [
+    "Does TWIG use AI?",
+    "Only if you want it to. To draft a lesson plan, TWIG writes a prompt you paste into ChatGPT, then reads ChatGPT's reply back into the plan for you to review. TWIG itself sends nothing anywhere, and each plan has a declaration of AI use.",
+  ],
+  [
+    "How do I update TWIG?",
+    "Open Settings › Updates and click Check for updates. TWIG downloads the new version, checks its signature, and restarts. Your records are kept.",
   ],
   [
     "Windows says it protected my PC. Is it safe?",
@@ -222,17 +284,17 @@ export default function App() {
           <div className="relative mx-auto grid max-w-6xl items-center gap-12 px-6 py-20 lg:grid-cols-[1.05fr_1fr] lg:py-28">
             <div>
               <p className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-800">
-                Free · Open source · Works offline
+                Free · Open source · Works offline · Windows and Mac
               </p>
               <h1 className="mt-5 text-4xl font-bold tracking-tight text-stone-900 sm:text-5xl lg:text-6xl">
-                Your class records,
+                Your teaching work,
                 <br />
                 <span className="text-emerald-700">done in one place.</span>
               </h1>
               <p className="mt-5 max-w-xl text-lg leading-relaxed text-stone-600">
                 <strong className="font-semibold text-stone-800">TWIG</strong> — Teacher&rsquo;s Work Integration
-                Gateway — is a desktop app for Filipino teachers: e-class records, attendance and report cards, built
-                around the three-term school year. No internet needed.
+                Gateway — is a desktop app for Filipino teachers: e-class records, attendance, report cards, lesson
+                plans, quizzes and certificates, built around the three-term school year. No internet needed.
               </p>
               <div className="mt-8">
                 <DownloadButton large />
@@ -246,19 +308,12 @@ export default function App() {
           <div className="mx-auto max-w-6xl px-6 py-20">
             <h2 className="text-3xl font-bold tracking-tight text-stone-900">Everything for your classes</h2>
             <p className="mt-2 max-w-2xl text-stone-600">
-              From the first score of Term 1 to the printed report card, without juggling spreadsheets.
+              From the lesson plan to the printed report card, without juggling spreadsheets and Word files.
             </p>
-            <div className="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-              {FEATURES.map((f) => (
-                <div key={f.title} className="rounded-2xl border border-stone-200 bg-white p-6">
-                  <div className="text-2xl" aria-hidden="true">
-                    {f.icon}
-                  </div>
-                  <h3 className="mt-3 font-semibold text-stone-900">{f.title}</h3>
-                  <p className="mt-1.5 text-sm leading-relaxed text-stone-600">{f.text}</p>
-                </div>
-              ))}
-            </div>
+            <h3 className="mt-10 text-sm font-semibold tracking-wide text-emerald-800 uppercase">My classes</h3>
+            <FeatureGrid features={CLASS_FEATURES} />
+            <h3 className="mt-12 text-sm font-semibold tracking-wide text-emerald-800 uppercase">Teaching</h3>
+            <FeatureGrid features={TEACHING_FEATURES} />
           </div>
         </section>
 
@@ -296,9 +351,9 @@ export default function App() {
               <h2 className="text-3xl font-bold tracking-tight text-white">Install in a minute</h2>
               <ol className="mt-6 space-y-4 text-emerald-100/90">
                 {[
-                  "Download the installer for Windows.",
-                  "Open it. If Windows SmartScreen appears, click “More info”, then “Run anyway”.",
-                  "Open TWIG, add your school profile and school year, then your sections.",
+                  "Download the installer for Windows, or the disk image for Mac.",
+                  "Windows: open it. If SmartScreen appears, click “More info”, then “Run anyway”. Mac: drag TWIG to Applications; if macOS blocks it, open System Settings › Privacy & Security and click “Open Anyway”.",
+                  "Open TWIG, fill in Settings (you and your school), add a school year, then your sections.",
                 ].map((step, i) => (
                   <li key={i} className="flex gap-3">
                     <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-emerald-800 text-xs font-bold text-white">
@@ -312,7 +367,7 @@ export default function App() {
             <div className="flex flex-col justify-center gap-4 rounded-2xl bg-emerald-900/60 p-8">
               <p className="text-lg font-semibold text-white">Ready when you are.</p>
               <p className="text-sm text-emerald-100/80">
-                Free for every teacher. Updates are published on GitHub — download the new installer to upgrade; your
+                Free for every teacher. TWIG updates itself: open Settings › Updates and click Check for updates. Your
                 records stay on your computer.
               </p>
               <div className="[&_a]:bg-white [&_a]:text-emerald-900 [&_a:hover]:bg-emerald-50 [&_p]:text-emerald-100/70 [&_p_a]:bg-transparent [&_p_a]:text-emerald-100">
