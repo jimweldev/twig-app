@@ -146,10 +146,29 @@ export async function checkBackup(path: string): Promise<BackupSummary> {
  * backup in and restarts TWIG. Only returns if something went wrong.
  */
 export async function restoreBackup() {
-  const now = new Date();
-  const stamp = `${today(now)} ${String(now.getHours()).padStart(2, "0")}-${String(now.getMinutes()).padStart(2, "0")}`;
-  const safety = await invoke<string>("restore_safety_path", { stamp });
-  await vacuumInto(safety);
+  await saveSafetyCopy(false);
   await closeDatabase();
   await invoke("restore_apply");
+}
+
+/** Saves the current records to the backup folder; returns the file's path. */
+async function saveSafetyCopy(reset: boolean) {
+  const now = new Date();
+  const stamp = `${today(now)} ${String(now.getHours()).padStart(2, "0")}-${String(now.getMinutes()).padStart(2, "0")}`;
+  const path = await invoke<string>("restore_safety_path", { stamp, reset });
+  await vacuumInto(path);
+  return path;
+}
+
+/**
+ * Clears everything: saves the current records as "TWIG before reset <date time>.db"
+ * in the backup folder, deletes the database and restarts TWIG empty, at the
+ * profile setup. Only returns if something went wrong.
+ */
+export async function resetEverything() {
+  await saveSafetyCopy(true);
+  await closeDatabase();
+  // Drafts kept in the browser storage (an unkept import, certificate awards) go too.
+  localStorage.clear();
+  await invoke("reset_apply");
 }

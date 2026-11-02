@@ -248,7 +248,8 @@ pub fn run() {
             backup::open_backup_folder,
             backup::restore_stage,
             backup::restore_safety_path,
-            backup::restore_apply
+            backup::restore_apply,
+            backup::reset_apply
         ])
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_dialog::init())

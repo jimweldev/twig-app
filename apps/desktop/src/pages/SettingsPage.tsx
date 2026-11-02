@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { BackupCard } from "@/components/backup-card";
 import { Field } from "@/components/field";
 import { PageHeader, PageSkeleton } from "@/components/page";
+import { ResetCard } from "@/components/reset-card";
 import { UpdateCard } from "@/components/update-card";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -99,6 +100,7 @@ export function SettingsPage({
           ))}
           <TabsTrigger value="backup">Backup</TabsTrigger>
           <TabsTrigger value="updates">Updates</TabsTrigger>
+          <TabsTrigger value="reset">Reset</TabsTrigger>
         </TabsList>
         {SECTIONS.map((section) => (
           <TabsContent key={section.tab} value={section.tab}>
@@ -129,6 +131,9 @@ export function SettingsPage({
         </TabsContent>
         <TabsContent value="updates" className="[&>*]:mt-2">
           <UpdateCard />
+        </TabsContent>
+        <TabsContent value="reset" className="[&>*]:mt-2">
+          <ResetCard />
         </TabsContent>
       </Tabs>
     </div>

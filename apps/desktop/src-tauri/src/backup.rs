@@ -25,6 +25,7 @@ const PREFIX: &str = if cfg!(debug_assertions) { "TWIG dev backup " } else { "TW
 const CONFIG: &str = if cfg!(debug_assertions) { "backup-dev.json" } else { "backup.json" };
 const DEFAULT_FOLDER: &str = if cfg!(debug_assertions) { "TWIG Backups (dev)" } else { "TWIG Backups" };
 const BEFORE_RESTORE: &str = if cfg!(debug_assertions) { "TWIG dev before restore " } else { "TWIG before restore " };
+const BEFORE_RESET: &str = if cfg!(debug_assertions) { "TWIG dev before reset " } else { "TWIG before reset " };
 const STAGING: &str = if cfg!(debug_assertions) { "restore-dev.db" } else { "restore.db" };
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -248,12 +249,13 @@ pub fn restore_stage(app: AppHandle, from: String) -> Result<Staged, String> {
     })
 }
 
-/// Where to save the current records before a restore replaces them.
+/// Where to save the current records before a restore (or, with `reset`, a reset) replaces them.
 #[tauri::command]
-pub fn restore_safety_path(app: AppHandle, stamp: String) -> Result<String, String> {
+pub fn restore_safety_path(app: AppHandle, stamp: String, reset: Option<bool>) -> Result<String, String> {
     let dir = folder(&app, &load(&app))?;
     fs::create_dir_all(&dir).map_err(|_| format!("Can't reach the backup folder {}.", dir.display()))?;
-    let path = dir.join(format!("{BEFORE_RESTORE}{stamp}.db"));
+    let prefix = if reset.unwrap_or(false) { BEFORE_RESET } else { BEFORE_RESTORE };
+    let path = dir.join(format!("{prefix}{stamp}.db"));
     if path.exists() {
         fs::remove_file(&path).map_err(|e| e.to_string())?;
     }
@@ -274,6 +276,19 @@ pub fn restore_apply(app: AppHandle) -> Result<(), String> {
     // A -wal left beside the live file would be replayed onto the restored one.
     remove_sidecars(&live)?;
     fs::rename(&staging, &live).map_err(|e| format!("Couldn't restore the backup: {e}"))?;
+    app.restart()
+}
+
+/// Deletes the database and restarts TWIG, which creates an empty one. The
+/// frontend saves a copy and closes its connections first. Backup settings stay.
+#[tauri::command]
+pub fn reset_apply(app: AppHandle) -> Result<(), String> {
+    let live = config_dir(&app)?.join(crate::DB_URL.trim_start_matches("sqlite:"));
+    for p in with_sidecars(&live) {
+        if p.exists() {
+            fs::remove_file(&p).map_err(|e| format!("Couldn't clear {}: {e}", p.display()))?;
+        }
+    }
     app.restart()
 }
 
