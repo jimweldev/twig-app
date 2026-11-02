@@ -37,10 +37,10 @@ const parseLrn = (text: string) => {
 /** A birthdate typed like Excel shows it (3/9/2014) or as 2014-03-09; blank is allowed. */
 const parseBirthdate = (text: string) => (text.trim() ? normalizeDate(text) || null : "");
 
-/** "2014-03-09" -> "3/9/2014", the way Excel shows dates in the Philippines. */
+/** "2014-03-09" -> "03/09/2014": month first, two digits each so the column lines up. */
 const showDate = (iso: string) => {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
-  return m ? `${Number(m[2])}/${Number(m[3])}/${m[1]}` : "";
+  return m ? `${m[2]}/${m[3]}/${m[1]}` : "";
 };
 
 /**
@@ -102,6 +102,8 @@ function SheetCell({
       onBlur={() => {
         setTyping(false);
         if (parsed !== null && parsed !== value) onCommit(parsed);
+        // Same value typed another way (9/8/2013): show it the standard way again.
+        else if (parsed === value) setText(shown);
       }}
       onKeyDown={(e) => {
         if (e.key === "Escape") {
@@ -282,8 +284,8 @@ export function SectionLearners({
                           row={shown.indexOf(l)}
                           col={1}
                           label="Birthdate"
-                          placeholder="m/d/yyyy"
-                          invalidHint="Type a date like 3/9/2014"
+                          placeholder="mm/dd/yyyy"
+                          invalidHint="Type a date like 09/08/2013"
                           className="w-28 tabular-nums"
                           parse={parseBirthdate}
                           onCommit={(birthdate) => run(() => updateLearner({ ...l, birthdate }))}
