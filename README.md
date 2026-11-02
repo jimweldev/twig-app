@@ -30,7 +30,7 @@ npm test                 # run grading tests
   git push origin v0.1.1
   ```
 
-  The site always links to the latest release, and installed apps find it under **School profile → Check for updates** (signed with the Tauri updater key; see [CODE_SIGNING.md](CODE_SIGNING.md)). Installers are signed through SignPath once set up — see [CODE_SIGNING.md](CODE_SIGNING.md).
+  The site always links to the latest release, and installed apps find it under **Settings → Updates (TWIG also checks when it opens)** (signed with the Tauri updater key; see [CODE_SIGNING.md](CODE_SIGNING.md)). Installers are signed through SignPath once set up — see [CODE_SIGNING.md](CODE_SIGNING.md).
 
 ## Databases
 

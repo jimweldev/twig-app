@@ -28,6 +28,7 @@ import { SectionPage } from "@/pages/SectionPage";
 import { SectionsPage } from "@/pages/SectionsPage";
 import { gradeLabel } from "@/ecr/levels";
 import { useAutoBackup } from "@/lib/backup";
+import { useUpdateCheckOnStart } from "@/lib/updates";
 
 const inTauri = "__TAURI_INTERNALS__" in window;
 
@@ -239,6 +240,7 @@ function Shell() {
   const [sidebarCollapsed, toggleSidebar] = useSidebarCollapsed();
   const { navigate } = useRouter();
   useAutoBackup(loaded, () => navigate({ page: "settings", tab: "backup" }));
+  useUpdateCheckOnStart(loaded);
 
   // Swap the splash window for this one once the first data has loaded.
   useEffect(() => {

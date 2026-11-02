@@ -1,6 +1,7 @@
 import { Fragment } from "react";
 import { ArrowLeft, CalendarDays, ChevronRight, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { cn } from "cn";
+import { useUpdateState } from "@/lib/updates";
 import { useRouter, type Route } from "./router";
 import { useSchool } from "./school";
 import { WindowControls } from "./WindowControls";
@@ -29,6 +30,7 @@ export function AppHeader({
 }) {
   const { navigate } = useRouter();
   const { activeYear } = useSchool();
+  const update = useUpdateState();
   // Back goes one level up the trail, not through history, so it's always predictable.
   const up = [...crumbs].reverse().find((c, i) => i > 0 && c.route)?.route;
 
@@ -93,6 +95,22 @@ export function AppHeader({
           >
             DEV
           </span>
+        )}
+        {(update.kind === "available" || update.kind === "installing") && (
+          <button
+            type="button"
+            title="Open Settings › Updates"
+            onClick={() => navigate({ page: "settings", tab: "updates" })}
+            className="flex items-center gap-1.5 rounded-full bg-primary px-2.5 py-0.5 font-medium text-primary-foreground hover:bg-primary/90"
+          >
+            <span className="relative flex size-1.5">
+              <span className="absolute inline-flex size-full animate-ping rounded-full bg-primary-foreground opacity-75" />
+              <span className="relative inline-flex size-1.5 rounded-full bg-primary-foreground" />
+            </span>
+            {update.kind === "available"
+              ? `Update available · ${update.update.version}`
+              : `Updating${update.total ? ` · ${Math.round((update.done / update.total) * 100)}%` : "…"}`}
+          </button>
         )}
         <span className="flex items-center gap-1.5">
           <CalendarDays className="size-3.5" />

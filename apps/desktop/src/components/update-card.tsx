@@ -1,72 +1,52 @@
 import { useEffect, useState } from "react";
 import { getVersion } from "@tauri-apps/api/app";
-import { relaunch } from "@tauri-apps/plugin-process";
-import { check, type Update } from "@tauri-apps/plugin-updater";
 import { CheckCircle2, Download, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { checkForUpdate, installUpdate, useUpdateState } from "@/lib/updates";
 
-type State =
-  | { kind: "idle" }
-  | { kind: "checking" }
-  | { kind: "current" }
-  | { kind: "available"; update: Update }
-  | { kind: "installing"; percent: number | null }
-  | { kind: "error"; message: string };
+const mb = (bytes: number) => `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 
-/**
- * Manual update check. TWIG works offline, so it only contacts GitHub when
- * the teacher clicks the button. Updates are verified against the updater
- * public key in tauri.conf.json before they install.
- */
+/** A download bar; without a known size it shows how much has arrived and slides. */
+export function DownloadProgress({ done, total }: { done: number; total: number }) {
+  const percent = total ? Math.min(100, Math.round((done / total) * 100)) : null;
+  return (
+    <div className="flex w-full flex-col gap-1.5">
+      <div
+        role="progressbar"
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={percent ?? undefined}
+        className="h-2 w-full overflow-hidden rounded-full bg-muted"
+      >
+        <div
+          className={percent === null ? "h-full w-1/3 animate-pulse rounded-full bg-primary" : "h-full rounded-full bg-primary transition-[width] duration-200"}
+          style={percent === null ? undefined : { width: `${percent}%` }}
+        />
+      </div>
+      <p className="flex justify-between text-xs text-muted-foreground tabular-nums">
+        <span>{total ? `${mb(done)} of ${mb(total)}` : done ? mb(done) : "Starting…"}</span>
+        {percent !== null && <span className="font-medium text-foreground">{percent}%</span>}
+      </p>
+    </div>
+  );
+}
+
+/** Settings › Updates. TWIG checks quietly when it opens; this checks again on request and installs. */
 export function UpdateCard() {
   const [version, setVersion] = useState("");
-  const [state, setState] = useState<State>({ kind: "idle" });
+  const state = useUpdateState();
 
   useEffect(() => {
     getVersion().then(setVersion, () => setVersion(""));
   }, []);
-
-  const runCheck = async () => {
-    setState({ kind: "checking" });
-    try {
-      const update = await check();
-      setState(update ? { kind: "available", update } : { kind: "current" });
-    } catch (e) {
-      console.error(e);
-      setState({
-        kind: "error",
-        message: "Couldn't reach the update server. Check your internet connection and try again.",
-      });
-    }
-  };
-
-  const install = async (update: Update) => {
-    let total = 0;
-    let done = 0;
-    setState({ kind: "installing", percent: null });
-    try {
-      await update.downloadAndInstall((event) => {
-        if (event.event === "Started") total = event.data.contentLength ?? 0;
-        if (event.event === "Progress") {
-          done += event.data.chunkLength;
-          setState({ kind: "installing", percent: total ? Math.round((done / total) * 100) : null });
-        }
-      });
-      // On Windows the installer closes TWIG itself; elsewhere restart into the new version.
-      await relaunch();
-    } catch (e) {
-      console.error(e);
-      setState({ kind: "error", message: "The update couldn't be installed. Try again, or download it from the website." });
-    }
-  };
 
   return (
     <Card className="mt-6">
       <CardHeader>
         <CardTitle>App updates</CardTitle>
         <CardDescription>
-          {version ? `You have TWIG ${version}. ` : ""}TWIG only goes online when you check for updates.
+          {version ? `You have TWIG ${version}. ` : ""}TWIG looks for a new version when it opens, if you're online.
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-wrap items-center gap-3">
@@ -75,7 +55,7 @@ export function UpdateCard() {
             <p className="text-sm">
               <span className="font-medium">TWIG {state.update.version}</span> is available.
             </p>
-            <Button onClick={() => install(state.update)}>
+            <Button onClick={() => installUpdate(state.update)}>
               <Download /> Download and install
             </Button>
             <p className="w-full text-xs text-muted-foreground">
@@ -83,12 +63,15 @@ export function UpdateCard() {
             </p>
           </>
         ) : state.kind === "installing" ? (
-          <p className="text-sm text-muted-foreground">
-            Downloading the update{state.percent !== null ? ` · ${state.percent}%` : "…"}
-          </p>
+          <>
+            <p className="text-sm">
+              Downloading <span className="font-medium">TWIG {state.version}</span>…
+            </p>
+            <DownloadProgress done={state.done} total={state.total} />
+          </>
         ) : (
           <>
-            <Button variant="outline" disabled={state.kind === "checking"} onClick={runCheck}>
+            <Button variant="outline" disabled={state.kind === "checking"} onClick={() => checkForUpdate()}>
               <RefreshCw className={state.kind === "checking" ? "animate-spin" : ""} />
               {state.kind === "checking" ? "Checking…" : "Check for updates"}
             </Button>

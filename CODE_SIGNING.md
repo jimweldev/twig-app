@@ -32,8 +32,9 @@ This program will not transfer any information to other networked systems
 unless specifically requested by the user or the person installing or
 operating it. TWIG works offline: class records stay in a database on the
 user's computer, and grade files move between teachers only when a teacher
-exports one and sends it themselves. The only network request TWIG makes is when the user clicks
-**Check for updates**, which reads the latest release information from GitHub.
+exports one and sends it themselves. The only network request TWIG makes is the update
+check when it opens (and when the user clicks **Check for updates**), which reads
+the latest release information from GitHub and sends nothing else.
 
 ## Update signing
 
