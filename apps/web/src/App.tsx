@@ -268,7 +268,7 @@ const FAQ: [string, ReactNode][] = [
   ],
   [
     "Windows says it protected my PC. Is it safe?",
-    "Until code signing is in place (TWIG has applied for free signing through the SignPath Foundation), Windows SmartScreen shows a warning the first time. Click “More info”, then “Run anyway”. The full source code is public on GitHub.",
+    "Yes. TWIG isn’t code-signed yet, so Windows SmartScreen shows a warning the first time. Click “More info”, then “Run anyway”. The full source code is public on GitHub.",
   ],
   [
     "Is there a Mac version?",

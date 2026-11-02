@@ -1,14 +1,13 @@
 # Code signing policy
 
 TWIG's Windows installers are built from this repository by GitHub Actions
-(`.github/workflows/release.yml`) and signed through
-[SignPath](https://about.signpath.io).
+(`.github/workflows/release.yml`). The workflow can sign them through
+[SignPath](https://about.signpath.io) once a signing account is set up.
 
-> Free code signing provided by [SignPath.io](https://about.signpath.io),
-> certificate by [SignPath Foundation](https://signpath.org).
->
-> *Status: application to the SignPath Foundation pending. Until it is
-> approved, releases are published unsigned and the release notes say so.*
+> *Status: releases are published unsigned. The SignPath Foundation declined
+> the first application (November 2026) because the project is still new; it
+> asks to reapply once TWIG has wider public use. Until then, Windows
+> SmartScreen warns on first run ("More info" > "Run anyway").*
 
 ## What gets signed
 
