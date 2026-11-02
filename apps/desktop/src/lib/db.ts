@@ -11,6 +11,12 @@ import type { Quiz, QuizContent } from "@/quizzes/quiz";
 let dbPromise: Promise<Database> | null = null;
 const db = () => (dbPromise ??= invoke<string>("db_url").then((url) => Database.load(url)));
 
+/** Closes every connection, before a restore replaces the file. */
+export async function closeDatabase() {
+  await (await db()).close();
+  dbPromise = null;
+}
+
 /** Writes a complete copy of the database to `path`, which must not exist yet. */
 export async function vacuumInto(path: string) {
   await (await db()).execute("VACUUM INTO $1", [path]);

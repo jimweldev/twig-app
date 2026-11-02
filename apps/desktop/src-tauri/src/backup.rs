@@ -8,10 +8,15 @@
 //!
 //! The settings live in a small JSON file next to the database, not inside it,
 //! so restoring an old backup can't change where backups go.
+//!
+//! Restoring copies the chosen backup next to the database first (OneDrive
+//! may only have it online), lets the frontend check that copy, saves the
+//! current records as "TWIG before restore …", then swaps the copy in and
+//! restarts TWIG, which runs any newer migrations on it.
 
 use serde::{Deserialize, Serialize};
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use tauri::{AppHandle, Manager};
 use tauri_plugin_opener::OpenerExt;
 
@@ -19,6 +24,8 @@ use tauri_plugin_opener::OpenerExt;
 const PREFIX: &str = if cfg!(debug_assertions) { "TWIG dev backup " } else { "TWIG backup " };
 const CONFIG: &str = if cfg!(debug_assertions) { "backup-dev.json" } else { "backup.json" };
 const DEFAULT_FOLDER: &str = if cfg!(debug_assertions) { "TWIG Backups (dev)" } else { "TWIG Backups" };
+const BEFORE_RESTORE: &str = if cfg!(debug_assertions) { "TWIG dev before restore " } else { "TWIG before restore " };
+const STAGING: &str = if cfg!(debug_assertions) { "restore-dev.db" } else { "restore.db" };
 
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(default, rename_all = "camelCase")]
@@ -195,6 +202,79 @@ pub fn open_backup_folder(app: AppHandle) -> Result<(), String> {
     let dir = folder(&app, &load(&app))?;
     fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     app.opener().open_path(dir.to_string_lossy(), None::<&str>).map_err(|e| e.to_string())
+}
+
+fn config_dir(app: &AppHandle) -> Result<PathBuf, String> {
+    app.path().app_config_dir().map_err(|e| e.to_string())
+}
+
+/// The database file and the -wal/-shm files SQLite keeps beside it.
+fn with_sidecars(db: &Path) -> [PathBuf; 3] {
+    let side = |ext: &str| PathBuf::from(format!("{}-{ext}", db.display()));
+    [db.to_path_buf(), side("wal"), side("shm")]
+}
+
+fn remove_sidecars(db: &Path) -> Result<(), String> {
+    for p in &with_sidecars(db)[1..] {
+        if p.exists() {
+            fs::remove_file(p).map_err(|e| format!("Couldn't remove {}: {e}", p.display()))?;
+        }
+    }
+    Ok(())
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Staged {
+    /// For Database.load in the frontend.
+    url: String,
+    /// The newest migration this TWIG knows; a backup past it came from a newer TWIG.
+    latest_version: i64,
+}
+
+/// Copies the chosen backup next to the database, ready to be checked.
+#[tauri::command]
+pub fn restore_stage(app: AppHandle, from: String) -> Result<Staged, String> {
+    let staging = config_dir(&app)?.join(STAGING);
+    for p in with_sidecars(&staging) {
+        if p.exists() {
+            fs::remove_file(&p).map_err(|e| e.to_string())?;
+        }
+    }
+    fs::copy(&from, &staging).map_err(|e| format!("Couldn't read the backup: {e}"))?;
+    Ok(Staged {
+        url: format!("sqlite:{}", staging.display()),
+        latest_version: crate::migrations().iter().map(|m| m.version).max().unwrap_or(0),
+    })
+}
+
+/// Where to save the current records before a restore replaces them.
+#[tauri::command]
+pub fn restore_safety_path(app: AppHandle, stamp: String) -> Result<String, String> {
+    let dir = folder(&app, &load(&app))?;
+    fs::create_dir_all(&dir).map_err(|_| format!("Can't reach the backup folder {}.", dir.display()))?;
+    let path = dir.join(format!("{BEFORE_RESTORE}{stamp}.db"));
+    if path.exists() {
+        fs::remove_file(&path).map_err(|e| e.to_string())?;
+    }
+    Ok(path.to_string_lossy().into_owned())
+}
+
+/// Swaps the checked copy in for the database and restarts TWIG. The frontend
+/// closes its connections first, so nothing has the files open.
+#[tauri::command]
+pub fn restore_apply(app: AppHandle) -> Result<(), String> {
+    let dir = config_dir(&app)?;
+    let staging = dir.join(STAGING);
+    let live = dir.join(crate::DB_URL.trim_start_matches("sqlite:"));
+    if !staging.exists() {
+        return Err("The backup to restore is missing; try again.".into());
+    }
+    remove_sidecars(&staging)?;
+    // A -wal left beside the live file would be replayed onto the restored one.
+    remove_sidecars(&live)?;
+    fs::rename(&staging, &live).map_err(|e| format!("Couldn't restore the backup: {e}"))?;
+    app.restart()
 }
 
 #[cfg(test)]

@@ -29,7 +29,7 @@ fn lf(sql: &'static str) -> &'static str {
     }
 }
 
-fn migrations() -> Vec<Migration> {
+pub(crate) fn migrations() -> Vec<Migration> {
     vec![
         Migration {
             version: 1,
@@ -245,7 +245,10 @@ pub fn run() {
             backup::set_backup_settings,
             backup::backup_begin,
             backup::backup_finish,
-            backup::open_backup_folder
+            backup::open_backup_folder,
+            backup::restore_stage,
+            backup::restore_safety_path,
+            backup::restore_apply
         ])
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_dialog::init())

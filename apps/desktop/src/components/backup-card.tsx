@@ -1,20 +1,33 @@
 import { useEffect, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
-import { AlertCircle, CheckCircle2, FolderOpen, HardDriveDownload } from "lucide-react";
+import { AlertCircle, CheckCircle2, FolderOpen, HardDriveDownload, History } from "lucide-react";
 import { toast } from "sonner";
 import { Field } from "@/components/field";
 import { SimpleSelect } from "@/components/simple-select";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import {
   backUpNow,
+  checkBackup,
   getBackupStatus,
   openBackupFolder,
+  restoreBackup,
   saveBackupSettings,
   today,
   type BackupStatus,
+  type BackupSummary,
 } from "@/lib/backup";
 
 const KEEP_OPTIONS = [7, 14, 30, 60].map((n) => ({ value: String(n), label: `Last ${n} backups` }));
@@ -25,10 +38,12 @@ function describeDate(date: string) {
   return d.toLocaleDateString("en-PH", { dateStyle: "medium" });
 }
 
-/** Settings › Backup: the daily copy of all records to a folder the teacher picks. */
+/** Settings › Backup: the daily copy of all records to a folder the teacher picks, and restoring one. */
 export function BackupCard() {
   const [status, setStatus] = useState<BackupStatus | null>(null);
   const [busy, setBusy] = useState(false);
+  const [toRestore, setToRestore] = useState<{ name: string; summary: BackupSummary } | null>(null);
+  const [restoring, setRestoring] = useState(false);
 
   useEffect(() => {
     getBackupStatus().then(setStatus, (e) => toast.error(String(e)));
@@ -59,6 +74,37 @@ export function BackupCard() {
       setBusy(false);
     }
   };
+
+  const chooseBackup = async () => {
+    const picked = await open({
+      defaultPath: status.folderPath,
+      filters: [{ name: "TWIG backup", extensions: ["db"] }],
+      title: "Choose the backup to restore",
+    });
+    if (typeof picked !== "string") return;
+    try {
+      const summary = await checkBackup(picked);
+      setToRestore({ name: picked.split(/[\\/]/).pop() ?? picked, summary });
+    } catch (e) {
+      toast.error("Can't restore this file", { description: e instanceof Error ? e.message : String(e) });
+    }
+  };
+
+  const restore = async () => {
+    setRestoring(true);
+    try {
+      await restoreBackup(); // TWIG restarts when this works.
+    } catch (e) {
+      setRestoring(false);
+      setToRestore(null);
+      toast.error("The backup wasn't restored", {
+        description: `${e instanceof Error ? e.message : String(e)} Close TWIG and open it again; your records are unchanged.`,
+        duration: Infinity,
+      });
+    }
+  };
+
+  const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
 
   return (
     <Card className="mt-6">
@@ -124,7 +170,53 @@ export function BackupCard() {
             <span className="text-sm text-muted-foreground">No backup yet.</span>
           )}
         </div>
+
+        <div className="flex flex-col items-start gap-2 border-t pt-4">
+          <Label>Restore</Label>
+          <p className="text-sm text-muted-foreground">
+            Bring back your records from a backup file. Your current records are saved to the backup folder first.
+          </p>
+          <Button variant="outline" onClick={chooseBackup} disabled={restoring}>
+            <History /> Restore from a backup…
+          </Button>
+        </div>
       </CardContent>
+
+      <AlertDialog open={!!toRestore} onOpenChange={(o) => !o && !restoring && setToRestore(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Restore this backup?</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="flex flex-col gap-3">
+                <p className="font-mono text-xs break-all text-foreground">{toRestore?.name}</p>
+                {toRestore && (
+                  <p>
+                    It has {plural(toRestore.summary.schoolYears, "school year")},{" "}
+                    {plural(toRestore.summary.sections, "section")}, {plural(toRestore.summary.learners, "learner")} and{" "}
+                    {plural(toRestore.summary.classes, "class record")}.
+                  </p>
+                )}
+                <p>
+                  Everything in TWIG now is replaced by this backup, then TWIG restarts. Your current records are saved
+                  first as “TWIG before restore” in the backup folder.
+                </p>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={restoring}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={restoring}
+              onClick={(e) => {
+                e.preventDefault(); // Keep the dialog open while it works.
+                restore();
+              }}
+            >
+              {restoring ? "Restoring…" : "Restore and restart"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Card>
   );
 }
