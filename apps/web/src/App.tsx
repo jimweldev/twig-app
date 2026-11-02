@@ -242,7 +242,7 @@ function FeatureGrid({ features }: { features: Feature[] }) {
 const FAQ: [string, ReactNode][] = [
   [
     "Is TWIG an official DepEd app?",
-    "No. TWIG is an independent, free and open-source (MIT) tool made by a teacher-developer. It follows published DepEd orders (DO 015, s. 2026 for grading), but always check computations against the official issuances and your school's forms.",
+    "No. TWIG is an independent, free and open-source (MIT) tool made by a developer. It follows published DepEd orders (DO 015, s. 2026 for grading), but always check computations against the official issuances and your school's forms.",
   ],
   [
     "Do I need internet?",
