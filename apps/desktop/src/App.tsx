@@ -29,6 +29,7 @@ import { SectionsPage } from "@/pages/SectionsPage";
 import { gradeLabel } from "@/ecr/levels";
 import { useAutoBackup } from "@/lib/backup";
 import { useUpdateCheckOnStart } from "@/lib/updates";
+import { needsSetup, SetupPage } from "@/pages/SetupPage";
 
 const inTauri = "__TAURI_INTERNALS__" in window;
 
@@ -235,8 +236,9 @@ function Page() {
 }
 
 function Shell() {
-  const { loaded } = useSchool();
+  const { loaded, profile } = useSchool();
   const crumbs = useCrumbs();
+  const setup = loaded && needsSetup(profile);
   const [sidebarCollapsed, toggleSidebar] = useSidebarCollapsed();
   const { navigate } = useRouter();
   useAutoBackup(loaded, () => navigate({ page: "settings", tab: "backup" }));
@@ -252,10 +254,16 @@ function Shell() {
 
   return (
     <div className="flex h-screen">
-      <AppSidebar collapsed={sidebarCollapsed} />
+      {!setup && <AppSidebar collapsed={sidebarCollapsed} />}
       <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
-        <AppHeader crumbs={crumbs} sidebarCollapsed={sidebarCollapsed} onToggleSidebar={toggleSidebar} />
-        <div className="min-h-0 flex-1 overflow-auto bg-muted/30">{loaded ? <Page /> : <PageSkeleton />}</div>
+        <AppHeader
+          crumbs={setup ? [{ label: "Welcome to TWIG" }] : crumbs}
+          sidebarCollapsed={sidebarCollapsed}
+          onToggleSidebar={toggleSidebar}
+        />
+        <div className="min-h-0 flex-1 overflow-auto bg-muted/30">
+          {!loaded ? <PageSkeleton /> : setup ? <SetupPage /> : <Page />}
+        </div>
       </main>
     </div>
   );

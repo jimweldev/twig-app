@@ -44,7 +44,7 @@ pub struct BackupSettings {
 
 impl Default for BackupSettings {
     fn default() -> Self {
-        Self { enabled: true, folder: None, keep: 14, last_date: None, last_file: None, last_error: None }
+        Self { enabled: false, folder: None, keep: 14, last_date: None, last_file: None, last_error: None }
     }
 }
 
