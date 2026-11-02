@@ -33,51 +33,83 @@ function AppleIcon() {
 /** Mac visitors get the Mac download first, everyone else the Windows one. */
 const onMac = typeof navigator !== "undefined" && /Mac/i.test(navigator.userAgent);
 
-function DownloadButton({ large = false }: { large?: boolean }) {
+function DownloadButton() {
   const { release, status } = useLatestRelease();
   const mac = onMac && !!release?.mac;
   const href = (mac ? release?.mac?.url : release?.installer?.url) ?? RELEASES_URL;
   const size = mac ? release?.mac?.size : release?.installer?.size;
   const other = mac ? release?.installer : release?.mac;
-  const pad = large ? "px-6 py-3.5 text-base" : "px-4 py-2.5 text-sm";
 
   return (
-    <div className={large ? "flex flex-col items-start gap-2" : ""}>
+    <div className="flex flex-col items-start gap-2">
       <a
         href={href}
-        className={`inline-flex items-center gap-2.5 rounded-xl bg-emerald-700 font-semibold text-white shadow-lg shadow-emerald-900/20 transition hover:bg-emerald-800 ${pad}`}
+        className="inline-flex items-center gap-2.5 rounded-xl bg-emerald-700 px-6 py-3.5 text-base font-semibold text-white shadow-lg shadow-emerald-900/20 transition hover:bg-emerald-800"
       >
         {mac ? <AppleIcon /> : <WindowsIcon />}
         Download for {mac ? "Mac" : "Windows"}
       </a>
-      {large && (
-        <p className="text-sm text-stone-500">
-          {status === "loading" && "Checking the latest version…"}
-          {status === "ready" && release && (
-            <>
-              Version {release.version}
-              {size && ` · ${formatSize(size)}`} · {mac ? "macOS 11 or later" : "Windows 10 and 11"}
-              {other && (
-                <>
-                  {" · "}
-                  <a href={other.url} className="underline hover:text-stone-800">
-                    {mac ? "Windows" : "Mac"} version
-                  </a>
-                </>
-              )}
-            </>
-          )}
-          {status === "none" && (
-            <>
-              The first release is on its way —{" "}
-              <a href={RELEASES_URL} className="underline hover:text-stone-800">
-                check GitHub Releases
-              </a>
-              .
-            </>
-          )}
-        </p>
-      )}
+      <p className="text-sm text-stone-500">
+        {status === "loading" && "Checking the latest version…"}
+        {status === "ready" && release && (
+          <>
+            Version {release.version}
+            {size && ` · ${formatSize(size)}`} · {mac ? "macOS 11 or later" : "Windows 10 and 11"}
+            {other && (
+              <>
+                {" · "}
+                <a href={other.url} className="underline hover:text-stone-800">
+                  {mac ? "Windows" : "Mac"} version
+                </a>
+              </>
+            )}
+          </>
+        )}
+        {status === "none" && (
+          <>
+            The first release is on its way —{" "}
+            <a href={RELEASES_URL} className="underline hover:text-stone-800">
+              check GitHub Releases
+            </a>
+            .
+          </>
+        )}
+      </p>
+    </div>
+  );
+}
+
+/** One button per platform, for the install section. */
+function PlatformDownloads() {
+  const { release, status } = useLatestRelease();
+  const platforms = [
+    { name: "Windows", icon: <WindowsIcon />, file: release?.installer, needs: "Windows 10 and 11" },
+    { name: "Mac", icon: <AppleIcon />, file: release?.mac, needs: "Apple silicon and Intel, macOS 11 or later" },
+  ];
+
+  return (
+    <div className="flex flex-col gap-3">
+      {platforms.map((p) => (
+        <a
+          key={p.name}
+          href={p.file?.url ?? RELEASES_URL}
+          className="flex items-center gap-3 rounded-xl bg-white px-5 py-3.5 text-emerald-900 shadow-lg shadow-emerald-950/30 transition hover:bg-emerald-50"
+        >
+          {p.icon}
+          <span className="flex flex-col">
+            <span className="font-semibold">Download for {p.name}</span>
+            <span className="text-xs text-emerald-900/60">
+              {p.needs}
+              {p.file && ` · ${formatSize(p.file.size)}`}
+            </span>
+          </span>
+        </a>
+      ))}
+      <p className="text-sm text-emerald-100/70">
+        {status === "loading" && "Checking the latest version…"}
+        {status === "ready" && release && `Version ${release.version}`}
+        {status === "none" && "The first release is on its way."}
+      </p>
     </div>
   );
 }
@@ -272,9 +304,24 @@ export default function App() {
               GitHub
             </a>
           </div>
-          <div className="ml-auto sm:ml-0">
-            <DownloadButton />
-          </div>
+          <a
+            href="#install"
+            className="ml-auto inline-flex items-center gap-2 rounded-xl bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-emerald-900/20 transition hover:bg-emerald-800 sm:ml-0"
+          >
+            <svg
+              viewBox="0 0 24 24"
+              className="size-4"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M12 4v12M6 11l6 6 6-6M5 20h14" />
+            </svg>
+            Download
+          </a>
         </nav>
       </header>
 
@@ -297,7 +344,7 @@ export default function App() {
                 plans, quizzes and certificates, built around the three-term school year. No internet needed.
               </p>
               <div className="mt-8">
-                <DownloadButton large />
+                <DownloadButton />
               </div>
             </div>
             <ClassRecordPreview />
@@ -364,15 +411,13 @@ export default function App() {
                 ))}
               </ol>
             </div>
-            <div className="flex flex-col justify-center gap-4 rounded-2xl bg-emerald-900/60 p-8">
+            <div className="order-first flex flex-col justify-center gap-4 rounded-2xl bg-emerald-900/60 p-8 lg:order-none">
               <p className="text-lg font-semibold text-white">Ready when you are.</p>
               <p className="text-sm text-emerald-100/80">
                 Free for every teacher. TWIG updates itself: open Settings › Updates and click Check for updates. Your
                 records stay on your computer.
               </p>
-              <div className="[&_a]:bg-white [&_a]:text-emerald-900 [&_a:hover]:bg-emerald-50 [&_p]:text-emerald-100/70 [&_p_a]:bg-transparent [&_p_a]:text-emerald-100">
-                <DownloadButton large />
-              </div>
+              <PlatformDownloads />
             </div>
           </div>
         </section>
