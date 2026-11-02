@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { readTextFile } from "@tauri-apps/plugin-fs";
-import { ArrowRight, CircleCheck, ClipboardPaste, Download, FileUp, Info, TriangleAlert } from "lucide-react";
+import { ArrowRight, CircleCheck, GitCompare, ClipboardPaste, Download, FileUp, Info, TriangleAlert } from "lucide-react";
 import { SimpleSelect } from "@/components/simple-select";
 import { Field } from "@/components/field";
 import { Button } from "@/components/ui/button";
@@ -44,6 +44,7 @@ import {
 } from "@/ecr/exchange";
 import { areasForGrade, gradeLabel, isSeniorHigh, KINDER_RECORD, partArea, partsOf, type AreaPart } from "@/ecr/levels";
 import { displayName } from "@/lib/names";
+import { ImportChanges } from "./ImportChanges";
 import type { ImportResult } from "./ImportReviewBar";
 
 type Step =
@@ -109,6 +110,8 @@ export function ImportGradesDialog({
   // The file's part to copy from, when the file is from a MAPEH record; "" picks one.
   const [fromPart, setFromPart] = useState("");
   const [busy, setBusy] = useState(false);
+  // The current-vs-new table, opened on request.
+  const [comparing, setComparing] = useState(false);
 
   const load = async (text: string, pw?: string) => {
     try {
@@ -117,6 +120,7 @@ export function ImportGradesDialog({
       setTargets(Object.fromEntries(terms.map((t) => [t, terms.length === 1 && shownTerm ? shownTerm : t])));
       setIntoPart(parts.some((x) => x.id === shownPart) ? shownPart! : "");
       setFromPart("");
+      setComparing(false);
       setStep({ kind: "preview", packet, checksum: await packetChecksum(packet) });
     } catch (e) {
       if (e instanceof PasswordRequiredError) setStep({ kind: "password", text, error: pw ? e.message : undefined });
@@ -533,6 +537,26 @@ export function ImportGradesDialog({
                         </li>
                       )}
                     </ul>
+
+                    {pairs.length > 0 &&
+                      // One part copied from a file with parts: the file's term grades are the whole area's.
+                      !(part && fileParts.length > 0) &&
+                      (comparing ? (
+                        <ImportChanges
+                          section={section}
+                          learners={learners}
+                          localClasses={localClasses}
+                          area={area}
+                          partId={part?.id}
+                          pairs={pairs}
+                          matched={match.matched}
+                          onError={onError}
+                        />
+                      ) : (
+                        <Button variant="outline" size="sm" className="justify-self-start" onClick={() => setComparing(true)}>
+                          <GitCompare /> Compare current and new grades
+                        </Button>
+                      ))}
 
                     {match.unmatched.length > 0 && (
                       <div className="rounded-lg border p-3">
