@@ -1,7 +1,7 @@
 import { Fragment } from "react";
 import { monthShort, todayIso, type AttendanceTotals, type YearMonth } from "@/attendance/calendar";
 import type { Learner, Marking, SchoolProfile, SchoolYear, Section } from "@/lib/db";
-import { ageOn } from "@/lib/names";
+import { ageOn, properCase } from "@/lib/names";
 import { CORE_VALUES, MARKINGS } from "./observedValues";
 import type { GradeValue } from "./classGrades";
 import { descriptor, DESCRIPTOR_SCALE, PASSING_GRADE, TERMS } from "./grading";
@@ -17,8 +17,9 @@ import {
 } from "./levels";
 import { generalAverage, gradeIn, type AreaSource } from "./useSectionGrades";
 
+/** "Aquino, Patrick Morales": proper case, even for names stored in capitals. */
 const fullName = (l: Learner) =>
-  `${l.last_name.toUpperCase()}, ${l.first_name}${l.middle_name.trim() ? ` ${l.middle_name}` : ""}`;
+  `${properCase(l.last_name)}, ${properCase(l.first_name)}${l.middle_name.trim() ? ` ${properCase(l.middle_name)}` : ""}`;
 
 export interface LearnerAttendance {
   months: YearMonth[];
