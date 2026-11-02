@@ -45,7 +45,7 @@ export function SectionGrades({
 }) {
   const [period, setPeriod] = useState<Period>("final");
   const { activeYear } = useSchool();
-  const { areas: list, reload } = useSectionGrades(section, learners, localClasses, onError);
+  const { areas: allAreas, reload } = useSectionGrades(section, learners, localClasses, onError);
   const mode = gradingModeFor(section.grade_level, activeYear?.name ?? "");
   // Descriptive grades have no general average.
   const showAverage = period === "final" && mode === "numeric";
@@ -54,9 +54,10 @@ export function SectionGrades({
     reload();
   }, [reloadKey, reload]);
 
+  // Only subjects the section has (its class records and imported grade files), like the report card.
+  const list = allAreas.filter((s) => s.kind !== "missing");
   const areas = list.map((s) => s.area);
   const sources = new Map(list.map((s) => [s.area, s]));
-  const ready = list.filter((s) => s.kind !== "missing").length;
 
   const gradeOf = (area: string, learnerId: number): GradeValue =>
     gradeIn(sources.get(area)!, learnerId, period === "final" ? "final" : (Number(period) as 0 | 1 | 2));
@@ -82,8 +83,8 @@ export function SectionGrades({
     <div>
       <div className="mb-4 flex items-center justify-between gap-4">
         <p className="text-sm text-muted-foreground">
-          {ready} of {areas.length} learning areas available
-          {ready < areas.length && " · ask subject teachers to send their grade files"}
+          {areas.length} learning area{areas.length === 1 ? "" : "s"} · ask subject teachers to send their grade files
+          for the rest
         </p>
         <Tabs value={period} onValueChange={(v) => setPeriod(v as Period)}>
           <TabsList>
@@ -108,7 +109,6 @@ export function SectionGrades({
                     <div className="font-semibold text-foreground">{area}</div>
                     <div className="mt-0.5 text-[11px] font-normal">
                       {s.kind === "local" && <span className="text-primary">Your record</span>}
-                      {s.kind === "missing" && <span className="text-amber-700">Not received</span>}
                       {s.kind === "received" && (
                         <span className="inline-flex items-center gap-0.5 text-muted-foreground">
                           <span title={`From ${s.info.teacher_name || "unnamed teacher"}, imported ${formatDate(s.info.imported_at)}`}>
