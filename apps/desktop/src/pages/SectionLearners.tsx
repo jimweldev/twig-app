@@ -164,7 +164,8 @@ export function SectionLearners({
   const [form, setForm] = useState<NewLearner>(EMPTY);
   const [editing, setEditing] = useState<Learner | null>(null);
   const [bulk, setBulk] = useState("");
-  const [bulkSex, setBulkSex] = useState<Sex>("M");
+  // Blank until the teacher picks, so a list is never added under the wrong sex by default.
+  const [bulkSex, setBulkSex] = useState<Sex | "">("");
   const [adding, setAdding] = useState(false);
   const [pasting, setPasting] = useState(false);
   // The last learner added, so the teacher sees it worked while adding the next one.
@@ -181,7 +182,7 @@ export function SectionLearners({
 
   const bulkParsed = bulk
     .split(/\r?\n/)
-    .map((line) => parseLearnerLine(line, bulkSex))
+    .map((line) => parseLearnerLine(line, bulkSex || "M"))
     .filter((l): l is NewLearner => l !== null);
 
   const groups: [Sex, string][] = [
@@ -209,6 +210,7 @@ export function SectionLearners({
           variant="outline"
           onClick={() => {
             setBulk("");
+            setBulkSex("");
             setPasting(true);
           }}
         >
@@ -366,16 +368,17 @@ export function SectionLearners({
           />
           <DialogFooter className="sm:justify-between">
             <SimpleSelect
-              className="w-36"
+              className="w-44"
               value={bulkSex}
               onValueChange={(v) => setBulkSex(v as Sex)}
+              placeholder="Male or female?"
               options={[
                 { value: "M", label: "All male" },
                 { value: "F", label: "All female" },
               ]}
             />
             <Button
-              disabled={bulkParsed.length === 0}
+              disabled={bulkParsed.length === 0 || !bulkSex}
               onClick={() =>
                 run(async () => {
                   await addLearners(sectionId, bulkParsed);
