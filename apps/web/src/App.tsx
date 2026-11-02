@@ -35,36 +35,32 @@ const onMac = typeof navigator !== "undefined" && /Mac/i.test(navigator.userAgen
 
 function DownloadButton() {
   const { release, status } = useLatestRelease();
-  const mac = onMac && !!release?.mac;
-  const href = (mac ? release?.mac?.url : release?.installer?.url) ?? RELEASES_URL;
-  const size = mac ? release?.mac?.size : release?.installer?.size;
-  const other = mac ? release?.installer : release?.mac;
+  const windows = { name: "Windows", icon: <WindowsIcon />, href: release?.installer?.url ?? RELEASES_URL };
+  const mac = { name: "Mac", icon: <AppleIcon />, href: release?.mac?.url ?? RELEASES_URL };
+  // The visitor's own platform gets the filled button.
+  const [first, second] = onMac ? [mac, windows] : [windows, mac];
 
   return (
     <div className="flex flex-col items-start gap-2">
-      <a
-        href={href}
-        className="inline-flex items-center gap-2.5 rounded-xl bg-emerald-700 px-6 py-3.5 text-base font-semibold text-white shadow-lg shadow-emerald-900/20 transition hover:bg-emerald-800"
-      >
-        {mac ? <AppleIcon /> : <WindowsIcon />}
-        Download for {mac ? "Mac" : "Windows"}
-      </a>
+      <div className="flex flex-wrap gap-3">
+        <a
+          href={first.href}
+          className="inline-flex items-center gap-2.5 rounded-xl bg-emerald-700 px-6 py-3.5 text-base font-semibold text-white shadow-lg shadow-emerald-900/20 transition hover:bg-emerald-800"
+        >
+          {first.icon}
+          Download for {first.name}
+        </a>
+        <a
+          href={second.href}
+          className="inline-flex items-center gap-2.5 rounded-xl border border-emerald-700/30 bg-white px-6 py-3.5 text-base font-semibold text-emerald-800 transition hover:bg-emerald-50"
+        >
+          {second.icon}
+          Download for {second.name}
+        </a>
+      </div>
       <p className="text-sm text-stone-500">
         {status === "loading" && "Checking the latest version…"}
-        {status === "ready" && release && (
-          <>
-            Version {release.version}
-            {size && ` · ${formatSize(size)}`} · {mac ? "macOS 11 or later" : "Windows 10 and 11"}
-            {other && (
-              <>
-                {" · "}
-                <a href={other.url} className="underline hover:text-stone-800">
-                  {mac ? "Windows" : "Mac"} version
-                </a>
-              </>
-            )}
-          </>
-        )}
+        {status === "ready" && release && `Version ${release.version} · Windows 10 and 11 · macOS 11 or later`}
         {status === "none" && (
           <>
             The first release is on its way —{" "}
