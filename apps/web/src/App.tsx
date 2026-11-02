@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { formatSize, RELEASES_URL, REPO, useLatestRelease } from "./useLatestRelease";
+import { formatSize, RELEASES_URL, useLatestRelease } from "./useLatestRelease";
 
 function Logo({ className = "size-9" }: { className?: string }) {
   return (
@@ -61,15 +61,7 @@ function DownloadButton() {
       <p className="text-sm text-stone-500">
         {status === "loading" && "Checking the latest version…"}
         {status === "ready" && release && `Version ${release.version} · Windows 10 and 11 · macOS 11 or later`}
-        {status === "none" && (
-          <>
-            The first release is on its way —{" "}
-            <a href={RELEASES_URL} className="underline hover:text-stone-800">
-              check GitHub Releases
-            </a>
-            .
-          </>
-        )}
+        {status === "none" && "The first release is on its way."}
       </p>
     </div>
   );
@@ -113,11 +105,11 @@ function PlatformDownloads() {
 /** A small, static picture of the class record so visitors see the app at a glance. */
 function ClassRecordPreview() {
   const rows: [string, number[], number][] = [
-    ["AQUINO, Carlos B.", [18, 24, 45], 88],
-    ["CASTILLO, Rafael N.", [15, 22, 40], 83],
-    ["CRUZ, Daniel G.", [19, 27, 47], 92],
-    ["DELA CRUZ, Sofia R.", [12, 20, 36], 78],
-    ["FLORES, Gabriel A.", [9, 16, 30], 72],
+    ["Aquino, Carlos B.", [18, 24, 45], 88],
+    ["Castillo, Rafael N.", [15, 22, 40], 83],
+    ["Cruz, Daniel G.", [19, 27, 47], 92],
+    ["Dela Cruz, Sofia R.", [12, 20, 36], 78],
+    ["Flores, Gabriel A.", [9, 16, 30], 72],
   ];
   return (
     <div className="overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-2xl shadow-emerald-950/10">
@@ -185,8 +177,8 @@ const CLASS_FEATURES: Feature[] = [
     icon: <><path d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" /><rect x="6" y="14" width="12" height="8" /></>,
   },
   {
-    title: "Send grades without internet",
-    text: "Subject teachers export a grade file and send it through Messenger, email or USB. The adviser imports it in one click.",
+    title: "Share grades on Messenger",
+    text: "Subject teachers export a grade file and send it to the adviser on Messenger. The adviser imports it in one click.",
     icon: <path d="M22 2 11 13M22 2l-7 20-4-9-9-4 20-7z" />,
   },
   {
@@ -237,42 +229,63 @@ function FeatureGrid({ features }: { features: Feature[] }) {
   );
 }
 
+const b = (text: string) => <strong className="font-semibold text-stone-800">{text}</strong>;
+const code = (text: string) => <code className="rounded bg-stone-100 px-1 py-0.5 text-[0.85em]">{text}</code>;
+
 const FAQ: [string, ReactNode][] = [
   [
     "Is TWIG an official DepEd app?",
-    "No. TWIG is an independent, free and open-source (MIT) tool made by a developer. It follows published DepEd orders (DO 015, s. 2026 for grading), but always check computations against the official issuances and your school's forms.",
+    <>
+      <p>{b("No.")} TWIG is a free, independent tool made by a developer.</p>
+      <ul className="mt-2 list-disc space-y-1 pl-5">
+        <li>It follows DO 015, s. 2026 for grading.</li>
+        <li>Always double-check grades against your school&rsquo;s forms.</li>
+      </ul>
+    </>,
   ],
   [
     "Do I need internet?",
-    "Only to download it. TWIG runs fully offline after that, including sharing grades between teachers.",
+    <>
+      <p>{b("Only for three things:")}</p>
+      <ul className="mt-2 list-disc space-y-1 pl-5">
+        <li>Downloading TWIG</li>
+        <li>Sending grade files on Messenger</li>
+        <li>Updating TWIG</li>
+      </ul>
+      <p className="mt-2">Everything else works offline.</p>
+    </>,
   ],
   [
     "Where is my data saved?",
     <>
-      In a database file on your computer:{" "}
-      <code className="rounded bg-stone-100 px-1 py-0.5 text-[0.85em]">%APPDATA%\com.twig.desktop\twig.db</code> on
-      Windows, or{" "}
-      <code className="rounded bg-stone-100 px-1 py-0.5 text-[0.85em]">
-        ~/Library/Application Support/com.twig.desktop/twig.db
-      </code>{" "}
-      on a Mac. Copy that file to a USB drive now and then as a backup.
+      <p>{b("On your own computer.")} Nothing goes online.</p>
+      <ul className="mt-2 list-disc space-y-1 pl-5">
+        <li>Windows: {code("%APPDATA%\\com.twig.desktop\\twig.db")}</li>
+        <li>Mac: {code("~/Library/Application Support/com.twig.desktop/twig.db")}</li>
+      </ul>
+      <p className="mt-2">To back it up, copy that file to OneDrive or a flash drive now and then.</p>
     </>,
   ],
   [
     "Does TWIG use AI?",
-    "Only if you want it to. To draft a lesson plan, TWIG writes a prompt you paste into ChatGPT, then reads ChatGPT's reply back into the plan for you to review. TWIG itself sends nothing anywhere, and each plan has a declaration of AI use.",
+    <>
+      <p>{b("No AI is built in.")} For lesson plans, you can use ChatGPT outside the app:</p>
+      <ol className="mt-2 list-decimal space-y-1 pl-5">
+        <li>TWIG gives you a prompt.</li>
+        <li>Paste it into ChatGPT.</li>
+        <li>Paste ChatGPT&rsquo;s reply back into TWIG, then review it.</li>
+      </ol>
+    </>,
   ],
   [
     "How do I update TWIG?",
-    "Open Settings › Updates and click Check for updates. TWIG downloads the new version, checks its signature, and restarts. Your records are kept.",
-  ],
-  [
-    "Windows says it protected my PC. Is it safe?",
-    "Yes. TWIG isn’t code-signed yet, so Windows SmartScreen shows a warning the first time. Click “More info”, then “Run anyway”. The full source code is public on GitHub.",
-  ],
-  [
-    "Is there a Mac version?",
-    "Yes, for Apple silicon and Intel Macs (macOS 11 or later): use the Mac version link under the download button. The first time, macOS may say it can’t check the app for malware: open System Settings › Privacy & Security and click “Open Anyway”. There is no Linux version yet.",
+    <>
+      <ol className="list-decimal space-y-1 pl-5">
+        <li>Open {b("Settings › Updates")}.</li>
+        <li>Click {b("Check for updates")}.</li>
+      </ol>
+      <p className="mt-2">TWIG restarts on the new version. Your records are kept.</p>
+    </>,
   ],
 ];
 
@@ -297,9 +310,6 @@ export default function App() {
             </a>
             <a href="#faq" className="hover:text-stone-900">
               FAQ
-            </a>
-            <a href={`https://github.com/${REPO}`} className="hover:text-stone-900">
-              GitHub
             </a>
           </div>
           <a
@@ -329,7 +339,7 @@ export default function App() {
           <div className="relative mx-auto grid max-w-6xl items-center gap-12 px-6 py-20 lg:grid-cols-[1.05fr_1fr] lg:py-28">
             <div>
               <p className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-800">
-                Free · Open source · Works offline · Windows and Mac
+                Free · Open source · Works offline
               </p>
               <h1 className="mt-5 text-4xl font-bold tracking-tight text-stone-900 sm:text-5xl lg:text-6xl">
                 Your teaching work,
@@ -339,7 +349,7 @@ export default function App() {
               <p className="mt-5 max-w-xl text-lg leading-relaxed text-stone-600">
                 <strong className="font-semibold text-stone-800">TWIG</strong> — Teacher&rsquo;s Work Integration
                 Gateway — is a desktop app for Filipino teachers: e-class records, attendance, report cards, lesson
-                plans, quizzes and certificates, built around the three-term school year. No internet needed.
+                plans, quizzes and certificates, built around the three-term school year. Works offline.
               </p>
               <div className="mt-8">
                 <DownloadButton />
@@ -380,21 +390,15 @@ export default function App() {
         </section>
 
         <section id="sharing" className="mx-auto max-w-6xl px-6 py-20">
-          <h2 className="text-3xl font-bold tracking-tight text-stone-900">Sharing grades, no internet required</h2>
+          <h2 className="text-3xl font-bold tracking-tight text-stone-900">Sharing grades on Messenger</h2>
           <p className="mt-2 max-w-2xl text-stone-600">
-            Subject teachers and advisers each keep TWIG on their own laptop. Grades travel as a small file.
+            Each teacher has TWIG on their own laptop. Grades travel as one small file.
           </p>
           <ol className="mt-10 grid gap-5 md:grid-cols-3">
             {[
-              [
-                "Subject teacher",
-                "Opens the class record and clicks Send grades. TWIG saves a .twig file — add a password if you like.",
-              ],
-              ["Any way you like", "Send the file through Messenger, email, a shared folder or a USB drive."],
-              [
-                "Adviser",
-                "Imports the file in the advisory section. Learners are matched by LRN, and the consolidated grades are ready for report cards.",
-              ],
+              ["Subject teacher", "Open the class record and click Send grades. TWIG saves a .twig file."],
+              ["Messenger", "Send the .twig file to the adviser in a Messenger chat."],
+              ["Adviser", "Import the file in the advisory section. The grades are ready for report cards."],
             ].map(([title, text], i) => (
               <li key={title} className="rounded-2xl border border-stone-200 p-6">
                 <span className="flex size-8 items-center justify-center rounded-full bg-emerald-700 text-sm font-bold text-white">
@@ -413,15 +417,30 @@ export default function App() {
               <h2 className="text-3xl font-bold tracking-tight text-white">Install in a minute</h2>
               <ol className="mt-6 space-y-4 text-emerald-100/90">
                 {[
-                  "Download the installer for Windows, or the disk image for Mac.",
-                  "Windows: open it. If SmartScreen appears, click “More info”, then “Run anyway”. Mac: drag TWIG to Applications; if macOS blocks it, open System Settings › Privacy & Security and click “Open Anyway”.",
-                  "Open TWIG, fill in Settings (you and your school), add a school year, then your sections.",
+                  <>Download TWIG for your computer.</>,
+                  <>
+                    Install it.
+                    <ul className="mt-2 space-y-2 text-sm">
+                      <li>
+                        <strong className="text-white">Windows:</strong> open the installer. Blue warning? Click{" "}
+                        <strong className="text-white">More info</strong>, then{" "}
+                        <strong className="text-white">Run anyway</strong>.
+                      </li>
+                      <li>
+                        <strong className="text-white">Mac:</strong> drag TWIG to Applications. Blocked? Open{" "}
+                        <strong className="text-white">System Settings › Privacy &amp; Security</strong>, then click{" "}
+                        <strong className="text-white">Open Anyway</strong>.
+                      </li>
+                    </ul>
+                  </>,
+                  <>Open TWIG and fill in Settings: you and your school.</>,
+                  <>Add a school year, then your sections.</>,
                 ].map((step, i) => (
                   <li key={i} className="flex gap-3">
                     <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-emerald-800 text-xs font-bold text-white">
                       {i + 1}
                     </span>
-                    <span>{step}</span>
+                    <div>{step}</div>
                   </li>
                 ))}
               </ol>
@@ -446,7 +465,7 @@ export default function App() {
                   {q}
                   <span className="text-stone-400 transition group-open:rotate-45">+</span>
                 </summary>
-                <p className="mt-2 text-sm leading-relaxed text-stone-600">{a}</p>
+                <div className="mt-2 text-sm leading-relaxed text-stone-600">{a}</div>
               </details>
             ))}
           </div>
@@ -460,9 +479,7 @@ export default function App() {
             <span>TWIG — Teacher&rsquo;s Work Integration Gateway</span>
           </div>
           <p>Not affiliated with the Department of Education.</p>
-          <a href={`https://github.com/${REPO}`} className="hover:text-stone-800">
-            MIT licensed · Source on GitHub
-          </a>
+          <p>Free and open source (MIT license).</p>
         </div>
       </footer>
     </div>
