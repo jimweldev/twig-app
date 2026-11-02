@@ -279,12 +279,15 @@ pub fn restore_apply(app: AppHandle) -> Result<(), String> {
     app.restart()
 }
 
-/// Deletes the database and restarts TWIG, which creates an empty one. The
-/// frontend saves a copy and closes its connections first. Backup settings stay.
+/// Deletes the database and the backup settings, then restarts TWIG, which
+/// starts empty with the defaults (automatic backup off). The frontend saves a
+/// copy and closes its connections first.
 #[tauri::command]
 pub fn reset_apply(app: AppHandle) -> Result<(), String> {
-    let live = config_dir(&app)?.join(crate::DB_URL.trim_start_matches("sqlite:"));
-    for p in with_sidecars(&live) {
+    let dir = config_dir(&app)?;
+    let live = dir.join(crate::DB_URL.trim_start_matches("sqlite:"));
+    let settings = dir.join(CONFIG);
+    for p in with_sidecars(&live).iter().chain([&settings]) {
         if p.exists() {
             fs::remove_file(&p).map_err(|e| format!("Couldn't clear {}: {e}", p.display()))?;
         }

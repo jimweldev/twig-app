@@ -44,7 +44,7 @@ export function ResetCard() {
         <CardTitle>Reset TWIG</CardTitle>
         <CardDescription>
           Deletes everything: your profile, school years, sections, learners, class records, attendance, lesson plans,
-          quizzes and certificates. TWIG restarts empty.
+          quizzes, certificates and backup settings. TWIG restarts empty, with automatic backup off.
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col items-start gap-2">
