@@ -167,32 +167,32 @@ const CLASS_FEATURES: Feature[] = [
   {
     title: "E-class record",
     text: "Three-term class records with DO 015, s. 2026 weights, ST1/ST2/term exam, and the adjusted transmutation table. MAPEH keeps each part's own grades. Paste scores straight from Excel; grades compute as you type.",
-    icon: "📒",
+    icon: <><rect x="3" y="3" width="18" height="18" rx="2" /><path d="M3 9h18M3 15h18M9 3v18" /></>,
   },
   {
     title: "Kinder to Grade 12",
     text: "Descriptive ratings for Kindergarten and Key Stage 1, numeric grades for Grades 2–10, and Senior High subject types with their own weights.",
-    icon: "🎒",
+    icon: <><path d="M22 10 12 5 2 10l10 5 10-5z" /><path d="M6 12v5c3 3 9 3 12 0v-5" /></>,
   },
   {
     title: "Attendance",
     text: "A daily SF2-style grid for your advisory class. Mark absences, lates and no-class days; monthly totals fill the report card.",
-    icon: "🗓️",
+    icon: <><rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4M8 2v4M3 10h18m-12 6 2 2 4-4" /></>,
   },
   {
     title: "Report cards",
     text: "Print SF9-style progress report cards — grades, attendance, age and observed values — or save them as PDF.",
-    icon: "🖨️",
+    icon: <><path d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" /><rect x="6" y="14" width="12" height="8" /></>,
   },
   {
     title: "Send grades without internet",
     text: "Subject teachers export a grade file and send it through Messenger, email or USB. The adviser imports it in one click.",
-    icon: "📨",
+    icon: <path d="M22 2 11 13M22 2l-7 20-4-9-9-4 20-7z" />,
   },
   {
     title: "Your data stays with you",
     text: "Everything is saved on your own computer. No account, no sign-in, no cloud — it works with the Wi-Fi off.",
-    icon: "🔒",
+    icon: <><rect x="3" y="11" width="18" height="11" rx="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" /></>,
   },
 ];
 
@@ -200,22 +200,22 @@ const TEACHING_FEATURES: Feature[] = [
   {
     title: "ILAW lesson plans",
     text: "Lesson plans in the DO 16, s. 2026 format. Let ChatGPT draft the parts, review and edit them, then download a PDF with your school's logos in the footer.",
-    icon: "📝",
+    icon: <><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><path d="M14 2v6h6M16 13H8m8 4H8m2-8H8" /></>,
   },
   {
     title: "Quizzes and tests",
     text: "Make a quiz from a lesson plan: multiple choice, true or false, identification, matching, enumeration and essay. Download the test paper and its answer key as PDFs.",
-    icon: "✅",
+    icon: <><rect x="8" y="2" width="8" height="4" rx="1" /><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2m1 10 2 2 4-4" /></>,
   },
   {
     title: "Certificates",
     text: "Upload your certificate design, place the learner's name, award and grades on it, and print one for every learner at once.",
-    icon: "🏅",
+    icon: <><circle cx="12" cy="8" r="6" /><path d="M15.5 13 17 22l-5-3-5 3 1.5-9" /></>,
   },
   {
     title: "Classroom games",
     text: "Round 'Em Up picks a learner at random; Squad Up shuffles the class into balanced groups, with leaders if you like. Both run offline.",
-    icon: "🎲",
+    icon: <><rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="8" cy="8" r="1" fill="currentColor" /><circle cx="12" cy="12" r="1" fill="currentColor" /><circle cx="16" cy="16" r="1" fill="currentColor" /></>,
   },
 ];
 
@@ -224,8 +224,10 @@ function FeatureGrid({ features }: { features: Feature[] }) {
     <div className={`mt-6 grid gap-5 sm:grid-cols-2 ${features.length === 4 ? "lg:grid-cols-4" : "lg:grid-cols-3"}`}>
       {features.map((f) => (
         <div key={f.title} className="rounded-2xl border border-stone-200 bg-white p-6">
-          <div className="text-2xl" aria-hidden="true">
-            {f.icon}
+          <div className="grid size-10 place-items-center rounded-xl bg-emerald-50 text-emerald-700">
+            <svg viewBox="0 0 24 24" className="size-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              {f.icon}
+            </svg>
           </div>
           <h3 className="mt-3 font-semibold text-stone-900">{f.title}</h3>
           <p className="mt-1.5 text-sm leading-relaxed text-stone-600">{f.text}</p>
