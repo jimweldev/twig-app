@@ -1,3 +1,4 @@
+mod backup;
 #[cfg(windows)]
 mod pdf;
 #[cfg(target_os = "macos")]
@@ -236,7 +237,16 @@ pub fn run() {
             });
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![app_ready, db_url, save_pdf])
+        .invoke_handler(tauri::generate_handler![
+            app_ready,
+            db_url,
+            save_pdf,
+            backup::backup_status,
+            backup::set_backup_settings,
+            backup::backup_begin,
+            backup::backup_finish,
+            backup::open_backup_folder
+        ])
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(

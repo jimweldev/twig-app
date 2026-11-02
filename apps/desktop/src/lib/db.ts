@@ -11,6 +11,11 @@ import type { Quiz, QuizContent } from "@/quizzes/quiz";
 let dbPromise: Promise<Database> | null = null;
 const db = () => (dbPromise ??= invoke<string>("db_url").then((url) => Database.load(url)));
 
+/** Writes a complete copy of the database to `path`, which must not exist yet. */
+export async function vacuumInto(path: string) {
+  await (await db()).execute("VACUUM INTO $1", [path]);
+}
+
 export interface SchoolProfile {
   region: string;
   division: string;

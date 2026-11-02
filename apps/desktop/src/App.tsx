@@ -27,6 +27,7 @@ import { SchoolYearsPage } from "@/pages/SchoolYearsPage";
 import { SectionPage } from "@/pages/SectionPage";
 import { SectionsPage } from "@/pages/SectionsPage";
 import { gradeLabel } from "@/ecr/levels";
+import { useAutoBackup } from "@/lib/backup";
 
 const inTauri = "__TAURI_INTERNALS__" in window;
 
@@ -236,6 +237,8 @@ function Shell() {
   const { loaded } = useSchool();
   const crumbs = useCrumbs();
   const [sidebarCollapsed, toggleSidebar] = useSidebarCollapsed();
+  const { navigate } = useRouter();
+  useAutoBackup(loaded, () => navigate({ page: "settings", tab: "backup" }));
 
   // Swap the splash window for this one once the first data has loaded.
   useEffect(() => {

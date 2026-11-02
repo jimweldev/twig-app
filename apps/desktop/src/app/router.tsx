@@ -18,7 +18,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
-export const SETTINGS_TABS = ["teacher", "school", "signatories", "updates"] as const;
+export const SETTINGS_TABS = ["teacher", "school", "signatories", "backup", "updates"] as const;
 export type SettingsTab = (typeof SETTINGS_TABS)[number];
 
 export type Route =

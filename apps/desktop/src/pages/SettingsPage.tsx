@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { BackupCard } from "@/components/backup-card";
 import { Field } from "@/components/field";
 import { PageHeader, PageSkeleton } from "@/components/page";
 import { UpdateCard } from "@/components/update-card";
@@ -88,7 +89,7 @@ export function SettingsPage({
 
   return (
     <div className="page-narrow">
-      <PageHeader title="Settings" description="Your details, your school, and app updates." />
+      <PageHeader title="Settings" description="Your details, your school, backups and app updates." />
       <Tabs value={tab} onValueChange={(v) => setTab(v as SettingsTab)} className="mt-6">
         <TabsList>
           {SECTIONS.map((s) => (
@@ -96,6 +97,7 @@ export function SettingsPage({
               {s.label}
             </TabsTrigger>
           ))}
+          <TabsTrigger value="backup">Backup</TabsTrigger>
           <TabsTrigger value="updates">Updates</TabsTrigger>
         </TabsList>
         {SECTIONS.map((section) => (
@@ -122,6 +124,9 @@ export function SettingsPage({
             </Card>
           </TabsContent>
         ))}
+        <TabsContent value="backup" className="[&>*]:mt-2">
+          <BackupCard />
+        </TabsContent>
         <TabsContent value="updates" className="[&>*]:mt-2">
           <UpdateCard />
         </TabsContent>
