@@ -349,6 +349,23 @@ export default function App() {
           </div>
         </section>
 
+        <section id="video" className="border-t border-stone-100">
+          <div className="mx-auto max-w-4xl px-6 py-20 text-center">
+            <h2 className="text-3xl font-bold tracking-tight text-stone-900">See TWIG in two minutes</h2>
+            <p className="mx-auto mt-2 max-w-2xl text-stone-600">
+              Twig walks through the problems with the Excel class record and how TWIG fixes them. Narrated in Taglish.
+            </p>
+            <video
+              className="mt-8 aspect-video w-full rounded-2xl border border-stone-200 bg-stone-100 shadow-xl shadow-emerald-950/10"
+              src="video/twig-for-teachers.mp4"
+              poster="video/twig-for-teachers-poster.jpg"
+              controls
+              playsInline
+              preload="none"
+            />
+          </div>
+        </section>
+
         <section id="features" className="border-t border-stone-100 bg-stone-50/60">
           <div className="mx-auto max-w-6xl px-6 py-20">
             <h2 className="text-3xl font-bold tracking-tight text-stone-900">Everything for your classes</h2>
