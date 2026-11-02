@@ -77,7 +77,9 @@ function SheetCell({
   const [text, setText] = useState(shown);
   useEffect(() => setText(shown), [shown]);
   const parsed = parse(text);
-  const invalid = parsed === null;
+  // Shown red only after leaving the cell, so a half-typed date like "9/" isn't flagged.
+  const [typing, setTyping] = useState(false);
+  const invalid = parsed === null && !typing;
 
   return (
     <input
@@ -93,8 +95,12 @@ function SheetCell({
         className,
       )}
       onChange={(e) => setText(e.target.value)}
-      onFocus={(e) => e.currentTarget.select()}
+      onFocus={(e) => {
+        setTyping(true);
+        e.currentTarget.select();
+      }}
       onBlur={() => {
+        setTyping(false);
         if (parsed !== null && parsed !== value) onCommit(parsed);
       }}
       onKeyDown={(e) => {
