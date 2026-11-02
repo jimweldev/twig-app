@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <!-- T1: lowercase t with the slanted top of a book-type t. -->
+  <path d="M100 58 L132 32 V180 L100 180 Z"/>
+  <path d="M116 176 Q116 216 152 216 H168" fill="none" stroke="#000" stroke-width="32" stroke-linecap="round"/>
+  <rect x="56" y="88" width="76" height="32" rx="16"/>
+  <path d="M124 112 A70 70 0 0 1 212 48 A70 70 0 0 1 124 112 Z"/>
+</svg>

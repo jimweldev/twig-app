@@ -338,10 +338,10 @@
 @keyframes cb-throw-arm {
   0%,
   100% {
-    transform: rotate(-48deg);
+    transform: rotate(24deg);
   }
   50% {
-    transform: rotate(-86deg);
+    transform: rotate(62deg);
   }
 }
 
@@ -442,7 +442,8 @@
 .cb__arm--up {
   bottom: 0.92em;
   right: 0.2em;
-  transform: rotate(-48deg);
+  /* Raised out to the side, clear of the face. */
+  transform: rotate(24deg);
   transform-origin: bottom center;
   z-index: 1;
 }
@@ -459,6 +460,11 @@
   transform: translateX(-50%);
   border-radius: 50%;
   background: #e8b58c;
+}
+/* The lowered arm's hand hangs at its tip. */
+.cb__hand--low {
+  top: auto;
+  bottom: -0.12em;
 }
 
 .cb__head {

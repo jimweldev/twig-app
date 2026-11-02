@@ -390,7 +390,7 @@ export function ImportLearnersDialog({
                   load(step.text, password);
                 }}
               >
-                <Field label="Password" hint={step.error}>
+                <Field label="Password" required hint={step.error}>
                   <Input
                     type="password"
                     autoFocus

@@ -7,7 +7,15 @@ export interface Download {
   version: string;
   publishedAt: string;
   /** Windows installer: the NSIS setup .exe, else the .msi. */
-  installer: { name: string; url: string; size: number } | null;
+  installer: Asset | null;
+  /** Mac disk image, for Apple silicon and Intel. */
+  mac: Asset | null;
+}
+
+interface Asset {
+  name: string;
+  url: string;
+  size: number;
 }
 
 interface GitHubAsset {
@@ -27,12 +35,15 @@ export function useLatestRelease() {
     })
       .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
       .then((data: { tag_name: string; published_at: string; assets: GitHubAsset[] }) => {
-        const asset =
-          data.assets.find((a) => a.name.endsWith("-setup.exe")) ?? data.assets.find((a) => a.name.endsWith(".msi"));
+        const find = (suffix: string) => {
+          const a = data.assets.find((a) => a.name.endsWith(suffix));
+          return a ? { name: a.name, url: a.browser_download_url, size: a.size } : null;
+        };
         setRelease({
           version: data.tag_name.replace(/^v/, ""),
           publishedAt: data.published_at,
-          installer: asset ? { name: asset.name, url: asset.browser_download_url, size: asset.size } : null,
+          installer: find("-setup.exe") ?? find(".msi"),
+          mac: find(".dmg"),
         });
         setStatus("ready");
       })

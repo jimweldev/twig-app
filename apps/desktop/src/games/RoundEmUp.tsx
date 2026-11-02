@@ -17,8 +17,10 @@ const TAU = Math.PI * 2;
 
 // Field zones as fractions of the field box.
 const COWBOY = { x: 0.1, y: 0.82 };
-// The raised hand the rope leaves from.
-const HAND = { x: COWBOY.x + 0.02, y: COWBOY.y - 0.06 };
+// The raised hand the rope leaves from, in pixels from the cowboy's anchor. The cowboy is a fixed
+// size, so this stays put however big the field is.
+const HAND_OFFSET = { x: 55, y: -29 };
+const handAt = (w: number, h: number) => ({ x: COWBOY.x * w + HAND_OFFSET.x, y: COWBOY.y * h + HAND_OFFSET.y });
 // The herd grazes between the back fence (~46%) and the front fence (~86%).
 const BOUNDS = { left: 0.06, right: 0.94, top: 0.48, bottom: 0.86 };
 
@@ -280,8 +282,7 @@ export function RoundEmUp({
       }
 
       // Draw the lasso and rope while they're out.
-      const hx = HAND.x * w;
-      const hy = HAND.y * h;
+      const { x: hx, y: hy } = handAt(w, h);
       const lift = phaseNow === "throwing" ? liftRef.current : 0;
       const ry = lasso.y - lift;
       if (lassoNodeRef.current && phaseNow !== "idle") {
@@ -309,8 +310,7 @@ export function RoundEmUp({
     if (phaseRef.current === "throwing" || pool.length === 0) return;
     const target = pool[Math.floor(Math.random() * pool.length)];
     const { w, h } = sizeRef.current;
-    const handX = HAND.x * w;
-    const handY = HAND.y * h;
+    const { x: handX, y: handY } = handAt(w, h);
     targetRef.current = target;
     lassoRef.current = { x: handX, y: handY };
     const c = crittersRef.current.get(target.id);
@@ -464,7 +464,10 @@ export function RoundEmUp({
               <div
                 style={
                   isWinner
-                    ? { animation: "caught-bounce 0.6s ease-out forwards, caught-struggle 0.55s ease-in-out 0.6s infinite" }
+                    ? {
+                        animation:
+                          "caught-bounce 0.6s ease-out forwards, caught-struggle 0.55s ease-in-out 0.6s infinite",
+                      }
                     : undefined
                 }
               >
@@ -493,7 +496,13 @@ export function RoundEmUp({
 
         {/* Idle lasso twirling in the cowboy's hand */}
         {phase === "idle" && (
-          <div className="lasso pointer-events-none -translate-x-1/2 -translate-y-1/2" style={{ left: `${HAND.x * 100}%`, top: `${HAND.y * 100}%` }}>
+          <div
+            className="lasso pointer-events-none -translate-x-1/2 -translate-y-1/2"
+            style={{
+              left: `calc(${COWBOY.x * 100}% + ${HAND_OFFSET.x}px)`,
+              top: `calc(${COWBOY.y * 100}% + ${HAND_OFFSET.y}px)`,
+            }}
+          >
             <div className="lasso__cinch">
               <div className="lasso__ring" />
             </div>

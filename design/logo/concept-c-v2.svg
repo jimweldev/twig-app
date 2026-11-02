@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <!-- C: Leaf of paper. A leaf (also an old word for a page) with ruled lines on one half, on a short stem. -->
+  <g transform="rotate(35 128 128)">
+    <path fill-rule="evenodd" d="M128 22 A120 120 0 0 1 128 222 A120 120 0 0 1 128 22 Z
+      M122 62 L134 62 L134 222 L122 222 Z
+      M140 90 L170 90 A6 6 0 0 1 170 102 L140 102 Z
+      M140 122 L178 122 A6 6 0 0 1 178 134 L140 134 Z
+      M140 154 L172 154 A6 6 0 0 1 172 166 L140 166 Z"/>
+    <rect x="120" y="212" width="16" height="34" rx="8"/>
+  </g>
+</svg>

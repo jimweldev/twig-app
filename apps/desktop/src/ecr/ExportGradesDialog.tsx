@@ -81,7 +81,7 @@ export function ExportGradesDialog({
     setPassword("");
     setConfirm("");
     setWhich(initial);
-    getProfile().then((p) => setTeacher(p.teacher_name), onError);
+    getProfile().then((p) => setTeacher(classRecord.teacher || p.teacher_name), onError);
   }, [open, initial, onError]);
 
   const noLrn = learners.filter((l) => !l.lrn.trim()).length;
@@ -108,6 +108,7 @@ export function ExportGradesDialog({
             component: a.component,
             position: a.position,
             highest_score: a.highest_score,
+            part: a.part || undefined,
           }))
         : undefined,
       learners: learners.map((l) => {

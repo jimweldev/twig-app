@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildPrompt, parseResponse, type LessonPlan } from "./plan";
+import { buildPrompt, parseResponse, withAiValues, type LessonPlan } from "./plan";
 
 const plan: LessonPlan = {
   id: 1,
@@ -45,12 +45,44 @@ describe("parseResponse", () => {
   it("turns lists and nested objects into text", () => {
     const r = parseResponse(
       JSON.stringify({
-        objectives: ["Explain photosynthesis", "- Draw a leaf"],
+        references: ["Science 7 Learner's Material", "- DepEd LR Portal"],
         flow: { "Session 1": ["Hook", "Lab"] },
       }),
     );
-    expect(r.ok && r.values.objectives).toBe("- Explain photosynthesis\n- Draw a leaf");
+    expect(r.ok && r.values.references).toBe("Science 7 Learner's Material\n- DepEd LR Portal");
     expect(r.ok && r.values.flow).toBe("Session 1:\n- Hook\n- Lab");
+  });
+
+  it("ignores the prompt's // notes when ChatGPT copies them", () => {
+    const r = parseResponse('{\n  "title": "Rocks",  // A short lesson title\n  "references": ["https://x.org/a"]\n}');
+    expect(r).toEqual({ ok: true, values: { title: "Rocks", references: "https://x.org/a" } });
+  });
+
+  it("keeps LaTeX backslashes that ChatGPT didn't escape", () => {
+    const r = parseResponse('{"assessment": [["Solve $\\frac{1}{2} + \\theta \\neq x$\\nThen check"]]}');
+    expect(r.ok && r.values.assessment).toEqual(["Solve $\\frac{1}{2} + \\theta \\neq x$\nThen check"]);
+  });
+
+  it("turns double-escaped line breaks into real ones", () => {
+    const r = parseResponse(JSON.stringify({ flow: ["Hook (5 min)\\nLab (20 min)"], references: "A\\nB" }));
+    expect(r.ok && r.values.flow).toEqual(["Hook (5 min)\nLab (20 min)"]);
+    expect(r.ok && r.values.references).toBe("A\nB");
+  });
+
+  it("keeps per-session lists as one entry per session", () => {
+    const r = parseResponse(
+      JSON.stringify({ objectives: ["Session 1: Explain photosynthesis", ["1. Draw a leaf", "2. Label it"]] }),
+    );
+    expect(r.ok && r.values.objectives).toEqual(["Explain photosynthesis", "1. Draw a leaf\n2. Label it"]);
+  });
+});
+
+describe("withAiValues", () => {
+  it("puts session lists in their columns and replaces all-sessions text", () => {
+    const next = withAiValues({ flow: "old", ai_declaration: "Mine" }, { flow: ["A", "B"], title: "X" });
+    expect(next.flow).toBeUndefined();
+    expect(next.by_session?.flow).toEqual(["A", "B"]);
+    expect(next.ai_declaration).toBe("Mine");
   });
 
   it("explains what went wrong", () => {

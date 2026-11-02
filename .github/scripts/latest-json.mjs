@@ -22,6 +22,8 @@ const entry = (suffix) => {
 
 const nsis = entry("-setup.exe");
 const msi = entry(".msi");
+// One universal app for Apple silicon and Intel, as a .app.tar.gz the updater unpacks.
+const mac = entry(".app.tar.gz");
 
 writeFileSync(
   out,
@@ -35,6 +37,8 @@ writeFileSync(
         "windows-x86_64": nsis,
         "windows-x86_64-nsis": nsis,
         "windows-x86_64-msi": msi,
+        "darwin-aarch64": mac,
+        "darwin-x86_64": mac,
       },
     },
     null,

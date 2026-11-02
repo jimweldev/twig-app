@@ -4,6 +4,7 @@ import { useLeaveGuard } from "@/app/router";
 import { Button } from "@/components/ui/button";
 import { restoreImport, type ImportSnapshot } from "@/lib/db";
 import { clearPendingImport, savePendingImport } from "./pendingImport";
+import { toast } from "sonner";
 
 /** What an import changed, kept until the teacher keeps or undoes it. */
 export interface ImportResult {
@@ -39,6 +40,7 @@ export function ImportReviewBar({
   const keep = () => {
     clearPendingImport();
     onKeep();
+    toast.success("Imported grades kept");
   };
 
   const undo = async () => {
@@ -48,6 +50,7 @@ export function ImportReviewBar({
       clearPendingImport();
       await onUndone();
       onKeep();
+      toast("Import undone", { description: "The grades are back to how they were." });
     } catch (e) {
       onError(e);
     } finally {

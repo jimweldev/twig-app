@@ -10,8 +10,14 @@ use webview2_com::PrintToPdfCompletedHandler;
 use windows::core::{Interface, HSTRING};
 
 /// Writes the page, as it prints, to `path`. Pages are `width_in` × `height_in` inches
-/// with no margins; the page's own print CSS decides what is on them.
-pub async fn save(webview: tauri::Webview, path: String, width_in: f64, height_in: f64) -> Result<(), String> {
+/// with `margin_in` on every side; the page's own print CSS decides what is on them.
+pub async fn save(
+    webview: tauri::Webview,
+    path: String,
+    width_in: f64,
+    height_in: f64,
+    margin_in: f64,
+) -> Result<(), String> {
     let (tx, rx) = mpsc::channel::<Result<(), String>>();
     webview
         .with_webview(move |platform| {
@@ -27,10 +33,10 @@ pub async fn save(webview: tauri::Webview, path: String, width_in: f64, height_i
                     settings.SetOrientation(COREWEBVIEW2_PRINT_ORIENTATION_PORTRAIT)?;
                     settings.SetPageWidth(width_in)?;
                     settings.SetPageHeight(height_in)?;
-                    settings.SetMarginTop(0.0)?;
-                    settings.SetMarginBottom(0.0)?;
-                    settings.SetMarginLeft(0.0)?;
-                    settings.SetMarginRight(0.0)?;
+                    settings.SetMarginTop(margin_in)?;
+                    settings.SetMarginBottom(margin_in)?;
+                    settings.SetMarginLeft(margin_in)?;
+                    settings.SetMarginRight(margin_in)?;
                     let handler = PrintToPdfCompletedHandler::create(Box::new(move |result, saved| {
                         let _ = done.send(match result {
                             Ok(()) if saved => Ok(()),

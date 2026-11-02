@@ -1,4 +1,5 @@
 import { Fragment, useState } from "react";
+import { Lock } from "lucide-react";
 import { useSchool } from "@/app/school";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -6,6 +7,7 @@ import type { ClassRecord, Learner } from "@/lib/db";
 import { displayName } from "@/lib/names";
 import { TERMS } from "./grading";
 import { KINDER_CODES, KINDER_DOMAINS } from "./levels";
+import { FinalizeTermControl, type useFinalizedTerms } from "./finalize";
 import { useDescriptiveRatings } from "./useDescriptiveRatings";
 
 export const KINDER_COLORS: Record<string, string> = {
@@ -28,9 +30,20 @@ export function KinderLegend({ className = "" }: { className?: string }) {
 }
 
 /** Kindergarten progress: CO / DV / BG per developmental domain, per term. */
-export function KinderSheet({ classRecord, learners }: { classRecord: ClassRecord; learners: Learner[] }) {
+export function KinderSheet({
+  classRecord,
+  learners,
+  finalized,
+  initialTerm,
+}: {
+  classRecord: ClassRecord;
+  learners: Learner[];
+  finalized: ReturnType<typeof useFinalizedTerms>;
+  /** The term tab to open on. */
+  initialTerm?: number;
+}) {
   const { onError } = useSchool();
-  const [term, setTerm] = useState(1);
+  const [term, setTerm] = useState(initialTerm ?? 1);
   const { loading, codeOf, setCode } = useDescriptiveRatings(classRecord.id, onError);
   const groups: ["M" | "F", string][] = [
     ["M", "Male"],
@@ -45,11 +58,18 @@ export function KinderSheet({ classRecord, learners }: { classRecord: ClassRecor
             {TERMS.map((t) => (
               <TabsTrigger key={t} value={String(t)}>
                 Term {t}
+                {finalized.isLocked(t) && <Lock className="size-3 text-emerald-700" aria-label="Finalized" />}
               </TabsTrigger>
             ))}
           </TabsList>
         </Tabs>
-        <KinderLegend />
+        <FinalizeTermControl
+          term={term}
+          finalizedAt={finalized.finalized.get(term)}
+          onFinalize={() => finalized.finalize(term)}
+          onUnfinalize={() => finalized.unfinalize(term)}
+        />
+        <KinderLegend className="ml-auto" />
       </div>
       <div className="min-h-0 flex-1 overflow-auto p-6">
         <p className="mb-4 max-w-3xl text-sm text-muted-foreground">
@@ -74,7 +94,10 @@ export function KinderSheet({ classRecord, learners }: { classRecord: ClassRecor
                 {groups.map(([sex, label]) => (
                   <Fragment key={sex}>
                     <tr>
-                      <td colSpan={KINDER_DOMAINS.length + 2} className="border border-stone-200 bg-stone-100 px-2 py-1 text-xs font-bold tracking-wide text-stone-600 uppercase">
+                      <td
+                        colSpan={KINDER_DOMAINS.length + 2}
+                        className="border border-stone-200 bg-stone-100 px-2 py-1 text-xs font-bold tracking-wide text-stone-600 uppercase"
+                      >
                         {label}
                       </td>
                     </tr>
@@ -87,10 +110,14 @@ export function KinderSheet({ classRecord, learners }: { classRecord: ClassRecor
                           {KINDER_DOMAINS.map((d) => {
                             const code = codeOf(l.id, term, d.key);
                             return (
-                              <td key={d.key} className={`border border-stone-200 p-0 ${code ? KINDER_COLORS[code] : ""}`}>
+                              <td
+                                key={d.key}
+                                className={`border border-stone-200 p-0 ${code ? KINDER_COLORS[code] : ""}`}
+                              >
                                 <select
                                   aria-label={`${displayName(l)} ${d.name} term ${term}`}
                                   value={code ?? ""}
+                                  disabled={finalized.isLocked(term)}
                                   onChange={(e) => setCode(l.id, term, d.key, e.target.value || null)}
                                   className="h-8 w-full cursor-pointer bg-transparent text-center font-bold outline-none focus:ring-2 focus:ring-primary focus:ring-inset"
                                 >
@@ -113,7 +140,9 @@ export function KinderSheet({ classRecord, learners }: { classRecord: ClassRecor
           </Card>
         )}
         {learners.length === 0 && (
-          <p className="mt-4 text-sm text-muted-foreground">No learners in this section yet. Use the Learners button above.</p>
+          <p className="mt-4 text-sm text-muted-foreground">
+            No learners in this section yet. Use the Learners button above.
+          </p>
         )}
       </div>
     </div>

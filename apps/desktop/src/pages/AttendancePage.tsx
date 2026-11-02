@@ -50,16 +50,23 @@ function AttendanceGrid({ schoolYear, section }: { schoolYear: SchoolYear; secti
 
   const presentOn = (date: string) => learners.filter((l) => statusOf(l.id, date) !== "A").length;
   const cellBase = "h-8 w-8 min-w-8 border border-stone-200 p-0 text-center text-xs";
-  // Thicker edges (same color) around each Monday–Friday week so weeks are easy to tell apart.
+  // A darker line between Monday–Friday weeks so weeks are easy to tell apart. Set on both sides, since
+  // with collapsed borders the cell on the left wins a tie.
   const dayCell = (d: string) => {
     const wd = weekdayOf(d);
-    return `${cellBase} ${wd === 1 ? "border-l-[3px]" : ""} ${wd === 5 ? "border-r-[3px]" : ""}`;
+    return `${cellBase} ${wd === 1 ? "border-l-stone-300" : ""} ${wd === 5 ? "border-r-stone-300" : ""}`;
   };
 
   return (
     <>
       <div className="mb-4 flex flex-wrap items-center gap-2">
-        <Button variant="outline" size="icon-sm" title="Previous month" disabled={index <= 0} onClick={() => setCurrent(months[index - 1])}>
+        <Button
+          variant="outline"
+          size="icon-sm"
+          title="Previous month"
+          disabled={index <= 0}
+          onClick={() => setCurrent(months[index - 1])}
+        >
           <ChevronLeft />
         </Button>
         <SimpleSelect
@@ -82,10 +89,16 @@ function AttendanceGrid({ schoolYear, section }: { schoolYear: SchoolYear; secti
             <span className="inline-block size-3.5 rounded-sm border bg-white" /> Present
           </span>
           <span className="flex items-center gap-1">
-            <span className="inline-grid size-3.5 place-items-center rounded-sm bg-red-100 text-[9px] font-bold text-red-700">A</span> Absent
+            <span className="inline-grid size-3.5 place-items-center rounded-sm bg-red-100 text-[9px] font-bold text-red-700">
+              A
+            </span>{" "}
+            Absent
           </span>
           <span className="flex items-center gap-1">
-            <span className="inline-grid size-3.5 place-items-center rounded-sm bg-amber-100 text-[9px] font-bold text-amber-700">L</span> Late
+            <span className="inline-grid size-3.5 place-items-center rounded-sm bg-amber-100 text-[9px] font-bold text-amber-700">
+              L
+            </span>{" "}
+            Late
           </span>
           <span className="flex items-center gap-1">
             <span className="inline-block size-3.5 rounded-sm bg-stone-200" /> No class
@@ -98,7 +111,8 @@ function AttendanceGrid({ schoolYear, section }: { schoolYear: SchoolYear; secti
       ) : (
         !loading && (
           <Card className="overflow-x-auto py-0">
-            <table className="border-collapse bg-white text-sm">
+            {/* No borders on the outer edge: the card draws it, rounded. */}
+            <table className="w-full border-collapse bg-white text-sm [&_tbody>tr:last-child>*]:border-b-0 [&_thead>tr>*]:border-t-0 [&_tr>*:first-child]:border-l-0 [&_tr>*:last-child]:border-r-0">
               <thead>
                 <tr className="bg-stone-50 text-stone-700">
                   <th className="sticky left-0 z-20 w-8 min-w-8 border border-stone-200 bg-stone-50 text-xs">#</th>
@@ -109,10 +123,17 @@ function AttendanceGrid({ schoolYear, section }: { schoolYear: SchoolYear; secti
                     const off = noClass.has(d);
                     const future = d > today;
                     return (
-                      <th key={d} className={`${dayCell(d)} ${off ? "bg-stone-200" : ""} ${d === today ? "bg-primary/10" : ""}`}>
+                      <th
+                        key={d}
+                        className={`${dayCell(d)} ${off ? "bg-stone-200" : ""} ${d === today ? "bg-primary/10" : ""}`}
+                      >
                         <button
                           type="button"
-                          title={off ? "No class — click to make it a school day" : "Click to mark as no class (holiday, suspension)"}
+                          title={
+                            off
+                              ? "No class — click to make it a school day"
+                              : "Click to mark as no class (holiday, suspension)"
+                          }
                           onClick={() => toggleNoClass(d)}
                           className={`flex h-full w-full flex-col items-center justify-center leading-none hover:bg-stone-100 ${
                             future ? "text-stone-400" : ""
@@ -176,10 +197,14 @@ function AttendanceGrid({ schoolYear, section }: { schoolYear: SchoolYear; secti
                               );
                             })}
                             <td className="border border-stone-200 px-2 text-center tabular-nums">{t.present}</td>
-                            <td className={`border border-stone-200 px-2 text-center tabular-nums ${t.absent ? "text-red-700" : ""}`}>
+                            <td
+                              className={`border border-stone-200 px-2 text-center tabular-nums ${t.absent ? "text-red-700" : ""}`}
+                            >
                               {t.absent}
                             </td>
-                            <td className={`border border-stone-200 px-2 text-center tabular-nums ${t.late ? "text-amber-700" : ""}`}>
+                            <td
+                              className={`border border-stone-200 px-2 text-center tabular-nums ${t.late ? "text-amber-700" : ""}`}
+                            >
                               {t.late}
                             </td>
                           </tr>
@@ -189,7 +214,9 @@ function AttendanceGrid({ schoolYear, section }: { schoolYear: SchoolYear; secti
                 ))}
                 <tr className="bg-stone-50 font-semibold">
                   <td className="sticky left-0 z-10 border border-stone-200 bg-stone-50" />
-                  <td className="sticky left-8 z-10 border border-stone-200 bg-stone-50 px-2 text-xs">Present per day</td>
+                  <td className="sticky left-8 z-10 border border-stone-200 bg-stone-50 px-2 text-xs">
+                    Present per day
+                  </td>
                   {days.map((d) => (
                     <td key={d} className={`${dayCell(d)} ${noClass.has(d) ? "bg-stone-200" : ""}`}>
                       {noClass.has(d) || d > today ? "" : presentOn(d)}
@@ -212,7 +239,7 @@ export function AttendancePage() {
   const advisory = sections.find((s) => s.is_advisory);
 
   return (
-    <div className="mx-auto max-w-[96rem] p-8">
+    <div className="page-wide">
       <PageHeader
         title="Attendance"
         description={

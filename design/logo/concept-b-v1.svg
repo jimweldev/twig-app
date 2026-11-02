@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <!-- B: Sprouting check. A teacher's check mark whose long stroke ends in a leaf. -->
+  <path d="M52 140 L104 192 L168 110" fill="none" stroke="#000" stroke-width="34" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M160 120 A78 78 0 0 1 228 30 A78 78 0 0 1 160 120 Z"/>
+</svg>

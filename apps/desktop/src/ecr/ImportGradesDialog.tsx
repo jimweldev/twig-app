@@ -42,7 +42,7 @@ import {
   scoreTerms,
   type GradePacket,
 } from "@/ecr/exchange";
-import { areasForGrade, gradeLabel, isSeniorHigh, KINDER_RECORD } from "@/ecr/levels";
+import { areasForGrade, gradeLabel, isSeniorHigh, KINDER_RECORD, partArea, partsOf, type AreaPart } from "@/ecr/levels";
 import { displayName } from "@/lib/names";
 import type { ImportResult } from "./ImportReviewBar";
 
@@ -68,7 +68,10 @@ export function ImportGradesDialog({
   learningArea,
   classId,
   shownTerm,
+  parts = [],
+  shownPart,
   disabled,
+  lockedTerms = [],
   onImported,
   onError,
 }: {
@@ -83,8 +86,14 @@ export function ImportGradesDialog({
   classId?: number;
   /** The term tab open in the class record: a one-term file goes there by default. */
   shownTerm?: number | null;
+  /** The class record's parts (MAPEH): grades can go into one of them. */
+  parts?: AreaPart[];
+  /** The part sheet open in the class record: the import goes there by default. */
+  shownPart?: string;
   /** While an earlier import waits to be kept or undone. */
   disabled?: boolean;
+  /** Finalized terms of the class record; nothing can be imported into them. */
+  lockedTerms?: number[];
   /** Called after the import is saved, with what it changed so the page can offer to undo it. */
   onImported: (result: ImportResult) => Promise<void>;
   onError: (e: unknown) => void;
@@ -95,6 +104,10 @@ export function ImportGradesDialog({
   // For each term in the file, the term it goes into here; 0 skips it. Terms not written to stay as they are.
   const [targets, setTargets] = useState<Record<number, number>>({});
   const [addMissing, setAddMissing] = useState(true);
+  // MAPEH: the part the grades go into; "" for the whole learning area.
+  const [intoPart, setIntoPart] = useState("");
+  // The file's part to copy from, when the file is from a MAPEH record; "" picks one.
+  const [fromPart, setFromPart] = useState("");
   const [busy, setBusy] = useState(false);
 
   const load = async (text: string, pw?: string) => {
@@ -102,6 +115,8 @@ export function ImportGradesDialog({
       const packet = await parsePacket(text, pw);
       const terms = packetTerms(packet);
       setTargets(Object.fromEntries(terms.map((t) => [t, terms.length === 1 && shownTerm ? shownTerm : t])));
+      setIntoPart(parts.some((x) => x.id === shownPart) ? shownPart! : "");
+      setFromPart("");
       setStep({ kind: "preview", packet, checksum: await packetChecksum(packet) });
     } catch (e) {
       if (e instanceof PasswordRequiredError) setStep({ kind: "password", text, error: pw ? e.message : undefined });
@@ -156,6 +171,26 @@ export function ImportGradesDialog({
 
   // Where the grades are saved: the class record's subject, else the file's.
   const area = learningArea ?? p?.learning_area ?? "";
+  const part = parts.find((x) => x.id === intoPart);
+  // Term grades for one part are kept apart from the whole learning area's.
+  const savedArea = part ? partArea(area, part.id) : area;
+  // A file from a MAPEH record has its own parts. Copy the one with scores, else the same part.
+  const fileActs = p?.activities ?? [];
+  const fileParts = p ? partsOf(p.learning_area).filter((x) => fileActs.some((a) => a.part === x.id)) : [];
+  const scoredParts = fileParts.filter((x) =>
+    fileActs.some((a, i) => a.part === x.id && p!.learners.some((l) => (l.scores?.[i] ?? null) !== null)),
+  );
+  const source = !part
+    ? ""
+    : fileParts.some((x) => x.id === fromPart)
+      ? fromPart
+      : scoredParts.length === 1
+        ? scoredParts[0].id
+        : fileParts.some((x) => x.id === part.id)
+          ? part.id
+          : (fileParts[0]?.id ?? "");
+  const sourceLabel = fileParts.find((x) => x.id === source)?.label;
+  const target = part ? `${area} – ${part.label}` : area;
   // Terms rebuilt from raw scores; the rest are imported as term grades.
   const scored = classId && p ? scoreTerms(p) : [];
 
@@ -179,7 +214,7 @@ export function ImportGradesDialog({
     if (p.section.trim().toLowerCase() !== section.name.trim().toLowerCase())
       warnings.push(`Different section: ${p.section} → ${section.name}`);
 
-    existing = received.find((r) => r.learning_area === area);
+    existing = received.find((r) => r.learning_area === savedArea);
     if (existing?.checksum === preview.checksum) warnings.push("Already imported once");
     // A one-term file is expected to be older than the last term's import.
     else if (existing && existing.exported_at > p.exported_at && packetTerms(p).length === 3)
@@ -195,6 +230,7 @@ export function ImportGradesDialog({
         .filter((x) => x.to > 0)
     : [];
   const clash = new Set(pairs.map((x) => x.to)).size !== pairs.length;
+  const intoLocked = pairs.filter((x) => lockedTerms.includes(x.to)).map((x) => x.to);
   const hasOwnRecord = localClasses.some((c) => c.learning_area === area);
 
   const doImport = async () => {
@@ -205,7 +241,7 @@ export function ImportGradesDialog({
       const fromGrades = pairs.filter((x) => !scored.includes(x.from));
       const snapshot = await snapshotImport(
         section.id,
-        area,
+        savedArea,
         classId,
         fromScores.map((x) => x.to as 1 | 2 | 3),
       );
@@ -217,14 +253,16 @@ export function ImportGradesDialog({
       const final = matchLearners(p.learners, current);
       if (classId && fromScores.length > 0) {
         for (const { from, to } of fromScores) {
-          const acts: ImportedActivity[] = (p.activities ?? []).flatMap((a, i) =>
-            a.term !== from
+          // Into one part: the chosen part's columns when the file has parts, else all of them.
+          const acts: ImportedActivity[] = fileActs.flatMap((a, i) =>
+            a.term !== from || (source && a.part !== source)
               ? []
               : [
                   {
                     component: a.component,
                     position: a.position,
                     highest_score: a.highest_score,
+                    part: part?.id ?? a.part,
                     scores: new Map(
                       final.matched.flatMap((m) => {
                         const s = m.incoming.scores?.[i] ?? null;
@@ -234,18 +272,18 @@ export function ImportGradesDialog({
                   },
                 ],
           );
-          await replaceTermScores(classId, to as 1 | 2 | 3, acts);
+          await replaceTermScores(classId, to as 1 | 2 | 3, acts, part?.id);
         }
         await clearReceivedTerms(
           section.id,
-          area,
+          savedArea,
           fromScores.map((x) => x.to),
         );
       }
       if (fromGrades.length > 0)
         await saveReceived({
           section_id: section.id,
-          learning_area: area,
+          learning_area: savedArea,
           teacher_name: p.teacher_name,
           exported_at: p.exported_at,
           checksum: preview.checksum,
@@ -259,10 +297,15 @@ export function ImportGradesDialog({
           }),
         });
       const moves = (xs: typeof pairs) =>
-        xs.map((x) => `${p.learning_area} Term ${x.from} → ${area} Term ${x.to}`).join(", ");
+        xs
+          .map(
+            (x) =>
+              `${p.learning_area}${sourceLabel ? ` – ${sourceLabel}` : ""} Term ${x.from} → ${target} Term ${x.to}`,
+          )
+          .join(", ");
       close();
       await onImported({
-        title: `${area} grades imported`,
+        title: `${target} grades imported`,
         focusTerm: pairs[0]?.to,
         snapshot,
         summary: [
@@ -332,7 +375,7 @@ export function ImportGradesDialog({
                   load(step.text, password);
                 }}
               >
-                <Field label="Password" hint={step.error}>
+                <Field label="Password" required hint={step.error}>
                   <Input
                     type="password"
                     autoFocus
@@ -399,6 +442,34 @@ export function ImportGradesDialog({
                         </p>
                       </div>
 
+                      {parts.length > 0 && (
+                        <div className="col-span-3 grid grid-cols-subgrid items-center border-t pt-2">
+                          {part && fileParts.length > 0 ? (
+                            <SimpleSelect
+                              className="h-8 w-full"
+                              value={source}
+                              onValueChange={setFromPart}
+                              options={fileParts.map((x) => ({
+                                value: x.id,
+                                label: scoredParts.includes(x) ? x.label : `${x.label} (no scores)`,
+                              }))}
+                            />
+                          ) : (
+                            <p className="font-medium">Into</p>
+                          )}
+                          <ArrowRight className="size-4 text-muted-foreground" />
+                          <SimpleSelect
+                            className="h-8 w-full"
+                            value={intoPart || "all"}
+                            onValueChange={(v) => setIntoPart(v === "all" ? "" : v)}
+                            options={[
+                              ...parts.map((x) => ({ value: x.id, label: x.label })),
+                              { value: "all", label: `Whole ${area}` },
+                            ]}
+                          />
+                        </div>
+                      )}
+
                       {packetTerms(p).map((t) => {
                         const graded = p.learners.filter((l) => (l.terms[t - 1] ?? null) !== null).length;
                         const to = targets[t] ?? 0;
@@ -434,10 +505,10 @@ export function ImportGradesDialog({
                         <li key={from} className="flex items-center gap-2 text-muted-foreground">
                           <Info className="size-4 shrink-0" />
                           {scored.includes(from) && classId
-                            ? `Replaces your Term ${to} scores`
+                            ? `Replaces your Term ${to} ${part ? `${part.label} ` : ""}scores`
                             : hasOwnRecord
-                              ? `Replaces Term ${to} grades in your ${area} record`
-                              : `Replaces Term ${to} ${area} grades`}
+                              ? `Replaces Term ${to} ${part ? `${part.label} ` : ""}grades in your ${area} record`
+                              : `Replaces Term ${to} ${target} grades`}
                         </li>
                       ))}
                       {warnings.map((w) => (
@@ -445,6 +516,12 @@ export function ImportGradesDialog({
                           <TriangleAlert className="size-4 shrink-0" /> {w}
                         </li>
                       ))}
+                      {intoLocked.length > 0 && (
+                        <li className="flex items-center gap-2 text-destructive">
+                          <TriangleAlert className="size-4 shrink-0" /> Term {intoLocked.join(", ")} is finalized.
+                          Unfinalize it or pick another term.
+                        </li>
+                      )}
                       {clash && (
                         <li className="flex items-center gap-2 text-destructive">
                           <TriangleAlert className="size-4 shrink-0" /> Two terms go into the same term. Pick different
@@ -490,7 +567,10 @@ export function ImportGradesDialog({
                 <Button variant="outline" onClick={close}>
                   Cancel
                 </Button>
-                <Button disabled={busy || blockers.length > 0 || pairs.length === 0 || clash} onClick={doImport}>
+                <Button
+                  disabled={busy || blockers.length > 0 || pairs.length === 0 || clash || intoLocked.length > 0}
+                  onClick={doImport}
+                >
                   Import grades
                 </Button>
               </DialogFooter>

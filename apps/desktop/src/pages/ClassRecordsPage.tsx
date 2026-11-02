@@ -14,7 +14,7 @@ export function ClassRecordsPage() {
   const grades = [...new Set(sections.map((s) => s.grade_level))];
 
   return (
-    <div className="mx-auto max-w-6xl p-8">
+    <div className="page">
       <PageHeader
         title="Class records"
         description={`Choose a section to open or add its subjects · SY ${activeYear?.name}`}
@@ -32,7 +32,9 @@ export function ClassRecordsPage() {
       ) : (
         grades.map((g) => (
           <section key={g} className="mt-6">
-            <h2 className="mb-3 text-xs font-semibold tracking-wide text-muted-foreground uppercase">{gradeLabel(g)}</h2>
+            <h2 className="mb-3 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+              {gradeLabel(g)}
+            </h2>
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {sections
                 .filter((s) => s.grade_level === g)

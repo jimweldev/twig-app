@@ -1,14 +1,15 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { ImageUp, Pencil, Plus, Printer, Trash2 } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
+import { FileDown, ImageUp, Pencil, Plus, Trash2 } from "lucide-react";
 import { cn } from "cn";
 import { useRouter } from "@/app/router";
 import { useSchool } from "@/app/school";
 import { CertificateCanvas } from "@/certificates/CertificateCanvas";
 import { applyKind, CERT_KINDS, kindInfo, type CertKind } from "@/certificates/fields";
-import { readCertificateImage, templateNameFromFile } from "@/certificates/image";
+import { CertificateImagePicker } from "@/certificates/CertificateImagePicker";
+import { templateNameFromFile } from "@/certificates/image";
 import { PrintCertificatesDialog } from "@/certificates/PrintCertificatesDialog";
 import { ConfirmDelete } from "@/components/confirm-delete";
-import { EmptyState, PageHeader } from "@/components/page";
+import { CardGridSkeleton, EmptyState, PageHeader } from "@/components/page";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -24,54 +25,18 @@ import {
   createCertificateTemplate,
   deleteCertificateTemplate,
   listCertificateTemplates,
+  type CertificateImage,
   type CertificateTemplate,
 } from "@/lib/db";
-
-/** A hidden file input behind a button; hands the chosen image to `onFile`. */
-export function ImagePicker({
-  onFile,
-  children,
-  variant,
-}: {
-  onFile: (file: File) => void;
-  children: React.ReactNode;
-  variant?: "default" | "outline";
-}) {
-  const input = useRef<HTMLInputElement>(null);
-  return (
-    <>
-      <input
-        ref={input}
-        type="file"
-        accept="image/png,image/jpeg,image/webp"
-        className="hidden"
-        onChange={(e) => {
-          const file = e.target.files?.[0];
-          e.target.value = "";
-          if (file) onFile(file);
-        }}
-      />
-      <Button variant={variant} onClick={() => input.current?.click()}>
-        {children}
-      </Button>
-    </>
-  );
-}
 
 /** Starts a template: pick what it's for, then its design image. */
 function NewTemplateDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
   const { navigate } = useRouter();
-  const { onError } = useSchool();
   const [kind, setKind] = useState<CertKind>("honors");
 
-  const create = async (file: File) => {
-    try {
-      const img = await readCertificateImage(file);
-      const id = await createCertificateTemplate(templateNameFromFile(file), img, { ...applyKind([], kind), kind });
-      navigate({ page: "certificate", id });
-    } catch (e) {
-      onError(e);
-    }
+  const create = async (img: CertificateImage, file: File) => {
+    const id = await createCertificateTemplate(templateNameFromFile(file), img, { ...applyKind([], kind), kind });
+    navigate({ page: "certificate", id });
   };
 
   return (
@@ -106,9 +71,9 @@ function NewTemplateDialog({ open, onOpenChange }: { open: boolean; onOpenChange
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
-          <ImagePicker onFile={create}>
+          <CertificateImagePicker onImage={create}>
             <ImageUp /> Choose design image…
-          </ImagePicker>
+          </CertificateImagePicker>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -133,7 +98,7 @@ export function CertificatesPage() {
   const shown = templates?.filter((t) => filter === "all" || t.kind === filter);
 
   return (
-    <div className="mx-auto max-w-6xl p-8">
+    <div className="page">
       <PageHeader
         title="Certificates"
         description="Upload your certificate design, place the learner's name, award, grades, date and other details on it, and print one for each learner."
@@ -159,6 +124,12 @@ export function CertificatesPage() {
               </span>
             </Button>
           ))}
+        </div>
+      )}
+
+      {templates === null && (
+        <div className="mt-6">
+          <CardGridSkeleton count={3} />
         </div>
       )}
 
@@ -206,8 +177,8 @@ export function CertificatesPage() {
               >
                 <Pencil />
               </Button>
-              <Button variant="ghost" size="icon-sm" title="Print" onClick={() => setPrinting(t)}>
-                <Printer />
+              <Button variant="ghost" size="icon-sm" title="Download PDF" onClick={() => setPrinting(t)}>
+                <FileDown />
               </Button>
               <ConfirmDelete
                 title={`Delete “${t.name}”?`}

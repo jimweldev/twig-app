@@ -1,5 +1,8 @@
 #[cfg(windows)]
 mod pdf;
+#[cfg(target_os = "macos")]
+#[path = "pdf_macos.rs"]
+mod pdf;
 
 use std::time::Duration;
 use tauri::{AppHandle, Manager};
@@ -105,6 +108,72 @@ fn migrations() -> Vec<Migration> {
             sql: lf(include_str!("../migrations/013_certificate_kind.sql")),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 14,
+            description: "class_teacher",
+            sql: lf(include_str!("../migrations/014_class_teacher.sql")),
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 15,
+            description: "class_weights",
+            sql: lf(include_str!("../migrations/015_class_weights.sql")),
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 16,
+            description: "saved_groups",
+            sql: lf(include_str!("../migrations/016_saved_groups.sql")),
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 17,
+            description: "finalized_terms",
+            sql: lf(include_str!("../migrations/017_finalized_terms.sql")),
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 18,
+            description: "school_address",
+            sql: lf(include_str!("../migrations/018_school_address.sql")),
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 19,
+            description: "quizzes",
+            sql: lf(include_str!("../migrations/019_quizzes.sql")),
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 20,
+            description: "activity_parts",
+            sql: lf(include_str!("../migrations/020_activity_parts.sql")),
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 21,
+            description: "profile_positions",
+            sql: lf(include_str!("../migrations/021_profile_positions.sql")),
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 22,
+            description: "school_acronym",
+            sql: lf(include_str!("../migrations/022_school_acronym.sql")),
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 23,
+            description: "region_name",
+            sql: lf(include_str!("../migrations/023_region_name.sql")),
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 24,
+            description: "lesson_footer",
+            sql: lf(include_str!("../migrations/024_lesson_footer.sql")),
+            kind: MigrationKind::Up,
+        },
     ]
 }
 
@@ -129,13 +198,21 @@ fn db_url() -> &'static str {
 
 /// Saves the page as it prints to a PDF at `path`, with no header or footer.
 #[tauri::command]
-async fn save_pdf(webview: tauri::Webview, path: String, width_in: f64, height_in: f64) -> Result<(), String> {
+async fn save_pdf(
+    webview: tauri::Webview,
+    path: String,
+    width_in: f64,
+    height_in: f64,
+    margin_in: f64,
+) -> Result<(), String> {
     #[cfg(windows)]
-    return pdf::save(webview, path, width_in, height_in).await;
-    #[cfg(not(windows))]
+    return pdf::save(webview, path, width_in, height_in, margin_in).await;
+    #[cfg(target_os = "macos")]
+    return pdf::save(webview, path, width_in, height_in, margin_in).await;
+    #[cfg(not(any(windows, target_os = "macos")))]
     {
-        let _ = (webview, path, width_in, height_in);
-        Err("Saving as PDF works on Windows only.".into())
+        let _ = (webview, path, width_in, height_in, margin_in);
+        Err("Saving as PDF works on Windows and macOS only.".into())
     }
 }
 

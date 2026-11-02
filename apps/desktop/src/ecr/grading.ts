@@ -83,11 +83,7 @@ export function computeTerm(
   const st2 = percentScore(of("ST2"), scoreOf).ps;
   const te = percentScore(of("TE"), scoreOf).ps;
   const exPs =
-    exam === "none"
-      ? 0
-      : exam === "te"
-        ? te
-        : round2(st1 * EXAM_SPLIT.ST1 + st2 * EXAM_SPLIT.ST2 + te * EXAM_SPLIT.TE);
+    exam === "none" ? 0 : exam === "te" ? te : round2(st1 * EXAM_SPLIT.ST1 + st2 * EXAM_SPLIT.ST2 + te * EXAM_SPLIT.TE);
 
   const WW = { ...ww, ws: round2(ww.ps * weights.WW) };
   const PT = { ...pt, ws: round2(pt.ps * weights.PT) };
@@ -122,12 +118,7 @@ export function finalGrade(termGrades: (number | null)[], terms: Term[] = TERMS)
   return Math.round((offered as number[]).reduce((a, b) => a + b, 0) / offered.length);
 }
 
-export type Descriptor =
-  | "Advancing"
-  | "Benchmarking"
-  | "Connecting"
-  | "Developing"
-  | "Emerging";
+export type Descriptor = "Advancing" | "Benchmarking" | "Connecting" | "Developing" | "Emerging";
 
 export function descriptor(grade: number): Descriptor {
   if (grade >= 90) return "Advancing";
@@ -173,7 +164,10 @@ export const REPORT_CARD_ORDER = [
 export function orderedAreas(grade: number, saved: string[] = [], present: string[] = []): string[] {
   const standard = LEARNING_AREAS.filter((a) => a.grades.includes(grade)).map((a) => a.name);
   const applicable = [...standard, ...present.filter((a) => !standard.includes(a))];
-  const defaults = [...REPORT_CARD_ORDER.filter((a) => applicable.includes(a)), ...applicable.filter((a) => !REPORT_CARD_ORDER.includes(a))];
+  const defaults = [
+    ...REPORT_CARD_ORDER.filter((a) => applicable.includes(a)),
+    ...applicable.filter((a) => !REPORT_CARD_ORDER.includes(a)),
+  ];
   const kept = saved.filter((a, i) => applicable.includes(a) && saved.indexOf(a) === i);
   return [...kept, ...defaults.filter((a) => !kept.includes(a))];
 }

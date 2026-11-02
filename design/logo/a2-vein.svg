@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <!-- A2: Branching T with a vein cut through the leaf. -->
+  <rect x="112" y="76" width="32" height="152" rx="16"/>
+  <rect x="36" y="76" width="108" height="32" rx="16"/>
+  <path fill-rule="evenodd" d="M132 100 A72 72 0 0 1 220 28 A72 72 0 0 1 132 100 Z
+    M160.96 81.52 L204.96 45.52 L199.84 39.28 L155.84 75.28 Z"/>
+</svg>

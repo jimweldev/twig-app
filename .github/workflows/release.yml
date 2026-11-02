@@ -1,13 +1,16 @@
-# Builds the Windows installers, signs them through SignPath (once set up),
-# and publishes them as a GitHub Release. Run it by pushing a tag that matches
-# the version in apps/desktop/src-tauri/tauri.conf.json:
+# Builds the Windows and Mac installers, signs the Windows ones through SignPath
+# (once set up), and publishes them as a GitHub Release. Run it by pushing a tag
+# that matches the version in apps/desktop/src-tauri/tauri.conf.json:
 #   git tag v0.1.0 && git push origin v0.1.0
+# Running it by hand (workflow_dispatch) builds both without publishing, to check
+# a change before tagging it.
 #
 # Signing turns on when these exist in the repo settings (see CODE_SIGNING.md):
 #   secret   SIGNPATH_API_TOKEN
 #   vars     SIGNPATH_ORGANIZATION_ID, SIGNPATH_PROJECT_SLUG,
 #            SIGNPATH_SIGNING_POLICY_SLUG, SIGNPATH_ARTIFACT_CONFIGURATION_SLUG
-# Without them the installers are published unsigned.
+# Without them the Windows installers are published unsigned. The Mac app is
+# ad-hoc signed only (no Apple Developer ID).
 #
 # In-app updates: the installers are also signed with the Tauri updater key
 # (secrets TAURI_SIGNING_PRIVATE_KEY and TAURI_SIGNING_PRIVATE_KEY_PASSWORD)
@@ -25,13 +28,38 @@ permissions:
   # SignPath reads this job's details to verify where the artifact was built.
   actions: read
 
+env:
+  TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+  TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+
 jobs:
-  release:
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Read app version
+        id: version
+        shell: bash
+        run: |
+          v=$(node -p "require('./apps/desktop/src-tauri/tauri.conf.json').version")
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          if [ "$GITHUB_REF_TYPE" = "tag" ] && [ "$GITHUB_REF_NAME" != "v$v" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME doesn't match the app version v$v in tauri.conf.json"
+            exit 1
+          fi
+          if [ -z "$TAURI_SIGNING_PRIVATE_KEY" ]; then
+            echo "::error::TAURI_SIGNING_PRIVATE_KEY is not set, so installed apps could not verify this update."
+            exit 1
+          fi
+
+  windows:
+    needs: version
     runs-on: windows-latest
     env:
       SIGNPATH_API_TOKEN: ${{ secrets.SIGNPATH_API_TOKEN }}
-      TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-      TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
     steps:
       - uses: actions/checkout@v7
 
@@ -47,17 +75,6 @@ jobs:
           workspaces: apps/desktop/src-tauri -> target
 
       - run: npm ci
-
-      - name: Read app version
-        id: version
-        shell: bash
-        run: |
-          v=$(node -p "require('./apps/desktop/src-tauri/tauri.conf.json').version")
-          echo "version=$v" >> "$GITHUB_OUTPUT"
-          if [ "$GITHUB_REF_TYPE" = "tag" ] && [ "$GITHUB_REF_NAME" != "v$v" ]; then
-            echo "::error::Tag $GITHUB_REF_NAME doesn't match the app version v$v in tauri.conf.json"
-            exit 1
-          fi
 
       - name: Build installers
         run: npm run tauri -w @twig/desktop -- build
@@ -96,37 +113,119 @@ jobs:
         shell: bash
         run: cp -r dist/unsigned dist/release
 
-      - name: Sign for the updater and write latest.json
+      - name: Sign for the updater
         shell: bash
-        env:
-          VERSION: ${{ steps.version.outputs.version }}
         run: |
-          if [ -z "$TAURI_SIGNING_PRIVATE_KEY" ]; then
-            echo "::error::TAURI_SIGNING_PRIVATE_KEY is not set, so installed apps could not verify this update."
-            exit 1
-          fi
           mkdir -p dist/sigs
           for f in dist/release/*-setup.exe dist/release/*.msi; do
             npm run tauri -w @twig/desktop -- signer sign "$GITHUB_WORKSPACE/$f"
             mv "$f.sig" dist/sigs/
           done
-          node .github/scripts/latest-json.mjs "$VERSION" dist/release dist/sigs dist/release/latest.json
+          echo "${{ env.SIGNPATH_API_TOKEN != '' }}" > dist/sigs/windows-signed
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: release-windows
+          path: dist/release
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: sigs-windows
+          path: dist/sigs
+          if-no-files-found: error
+
+  macos:
+    needs: version
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: apps/desktop/src-tauri -> target
+
+      - run: npm ci
+
+      # One app for Apple silicon and Intel Macs.
+      - name: Build app
+        run: npm run tauri -w @twig/desktop -- build --target universal-apple-darwin
+
+      - name: Collect the disk image and the updater archive
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          bundle=apps/desktop/src-tauri/target/universal-apple-darwin/release/bundle
+          mkdir -p dist/release dist/sigs
+          cp "$bundle"/dmg/*.dmg dist/release/
+          # The updater downloads this and swaps it in for the installed app.
+          tar -czf "dist/release/TWIG_${VERSION}_universal.app.tar.gz" -C "$bundle/macos" TWIG.app
+          f="dist/release/TWIG_${VERSION}_universal.app.tar.gz"
+          npm run tauri -w @twig/desktop -- signer sign "$GITHUB_WORKSPACE/$f"
+          mv "$f.sig" dist/sigs/
+          ls -l dist/release dist/sigs
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: release-macos
+          path: dist/release
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: sigs-macos
+          path: dist/sigs
+          if-no-files-found: error
+
+  publish:
+    needs: [version, windows, macos]
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/download-artifact@v7
+        with:
+          pattern: release-*
+          path: dist/release
+          merge-multiple: true
+
+      - uses: actions/download-artifact@v7
+        with:
+          pattern: sigs-*
+          path: dist/sigs
+          merge-multiple: true
+
+      - name: Write latest.json
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: node .github/scripts/latest-json.mjs "$VERSION" dist/release dist/sigs dist/release/latest.json
 
       - name: Publish GitHub Release
-        shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-          VERSION: ${{ steps.version.outputs.version }}
-          SIGNED: ${{ env.SIGNPATH_API_TOKEN != '' }}
+          VERSION: ${{ needs.version.outputs.version }}
         run: |
+          SIGNED=$(cat dist/sigs/windows-signed)
           {
-            echo "Download **TWIG_${VERSION}_x64-setup.exe** below and run it."
-            echo
+            echo "**Windows:** download **TWIG_${VERSION}_x64-setup.exe** below and run it."
             if [ "$SIGNED" = "true" ]; then
               echo "Free code signing provided by [SignPath.io](https://about.signpath.io), certificate by [SignPath Foundation](https://signpath.org)."
             else
               echo "This installer isn't code-signed yet, so Windows SmartScreen may warn the first time: click **More info**, then **Run anyway**."
             fi
+            echo
+            echo "**Mac** (Apple silicon and Intel, macOS 11 or later): download **TWIG_${VERSION}_universal.dmg**, open it and drag TWIG to Applications."
+            echo "The first time, macOS may say it can't check TWIG for malware: open **System Settings › Privacy & Security** and click **Open Anyway**."
           } > notes.md
           if gh release view "v$VERSION" > /dev/null 2>&1; then
             gh release upload "v$VERSION" dist/release/* --clobber

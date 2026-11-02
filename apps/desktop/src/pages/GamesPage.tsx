@@ -10,8 +10,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { gradeLabel } from "@/ecr/levels";
 import { CssAnimal, CssCowboy } from "@/games/farm-art";
 import { RoundEmUp } from "@/games/RoundEmUp";
-import { SquadUp } from "@/games/SquadUp";
-import { listLearners, type Learner, type Section } from "@/lib/db";
+import { memoryFromSaved, SquadUp } from "@/games/SquadUp";
+import { getSavedGroups, listLearners, type Learner, type SavedGrouping, type Section } from "@/lib/db";
 import "@/games/games.css";
 
 export type GameId = "round-em-up" | "squad-up";
@@ -57,11 +57,13 @@ function GameCard({
 export function GamesPage() {
   const { navigate } = useRouter();
   const { sections } = useSchool();
-  const [sectionId, setSectionId] = useState<number | null>(() => (sections.find((s) => s.is_advisory) ?? sections[0])?.id ?? null);
+  const [sectionId, setSectionId] = useState<number | null>(
+    () => (sections.find((s) => s.is_advisory) ?? sections[0])?.id ?? null,
+  );
   const play = (game: GameId) => (sectionId === null ? null : () => navigate({ page: "game", game, sectionId }));
 
   return (
-    <div className="mx-auto max-w-5xl p-8">
+    <div className="page">
       <PageHeader
         title="Games"
         description="Quick classroom games that run offline with your learners."
@@ -157,13 +159,18 @@ export function GamesPage() {
 }
 
 /** One game, played with a section's learners. Opened from Games or from a class record. */
-export function GamePage({ game, section }: { game: GameId; section: Section }) {
+export function GamePage({ game, section, groupsId }: { game: GameId; section: Section; groupsId?: number }) {
   const { onError } = useSchool();
   const [learners, setLearners] = useState<Learner[] | null>(null);
+  // A saved set of groups to regroup in Squad Up; undefined while loading.
+  const [regrouping, setRegrouping] = useState<SavedGrouping | null | undefined>(groupsId ? undefined : null);
 
   useEffect(() => {
     listLearners(section.id).then(setLearners, onError);
   }, [section.id, onError]);
+  useEffect(() => {
+    if (groupsId) getSavedGroups(groupsId).then(setRegrouping, onError);
+  }, [groupsId, onError]);
 
   return (
     <div className="flex h-full min-h-[640px] flex-col gap-4 p-6">
@@ -173,7 +180,19 @@ export function GamePage({ game, section }: { game: GameId; section: Section }) 
           {GAMES[game].tagline} · {gradeLabel(section.grade_level)} – {section.name}
         </p>
       </div>
-      {learners && (game === "round-em-up" ? <RoundEmUp learners={learners} /> : <SquadUp learners={learners} />)}
+      {learners &&
+        regrouping !== undefined &&
+        (game === "round-em-up" ? (
+          <RoundEmUp learners={learners} />
+        ) : (
+          <SquadUp
+            learners={learners}
+            sectionId={section.id}
+            regrouping={regrouping ?? undefined}
+            memory={regrouping ? memoryFromSaved(regrouping, learners) : null}
+            onError={onError}
+          />
+        ))}
     </div>
   );
 }

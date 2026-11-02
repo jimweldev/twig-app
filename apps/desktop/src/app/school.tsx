@@ -10,6 +10,7 @@ import {
   type Section,
 } from "@/lib/db";
 import { undoUnkeptImport } from "@/ecr/pendingImport";
+import { toast } from "sonner";
 
 interface SchoolValue {
   loaded: boolean;
@@ -20,9 +21,8 @@ interface SchoolValue {
   sections: Section[];
   classes: ClassRecord[];
   refresh: () => Promise<void>;
-  error: string | null;
+  /** Shows the error as a toast. */
   onError: (e: unknown) => void;
-  clearError: () => void;
 }
 
 const SchoolContext = createContext<SchoolValue | null>(null);
@@ -33,11 +33,10 @@ export function SchoolProvider({ children }: { children: ReactNode }) {
   const [schoolYears, setSchoolYears] = useState<SchoolYear[]>([]);
   const [sections, setSections] = useState<Section[]>([]);
   const [classes, setClasses] = useState<ClassRecord[]>([]);
-  const [error, setError] = useState<string | null>(null);
 
   const onError = useCallback((e: unknown) => {
     console.error(e);
-    setError(e instanceof Error ? e.message : String(e));
+    toast.error(e instanceof Error ? e.message : String(e));
   }, []);
 
   const refresh = useCallback(async () => {
@@ -71,9 +70,7 @@ export function SchoolProvider({ children }: { children: ReactNode }) {
         sections,
         classes,
         refresh,
-        error,
         onError,
-        clearError: () => setError(null),
       }}
     >
       {children}

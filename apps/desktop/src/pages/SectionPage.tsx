@@ -13,10 +13,11 @@ import {
 } from "@/lib/db";
 import { SectionGrades } from "@/ecr/SectionGrades";
 import { ImportLearnersDialog, SendLearnersDialog } from "./LearnerListTransfer";
+import { SectionGroups } from "./SectionGroups";
 import { SectionLearners } from "./SectionLearners";
 import { gradeLabel } from "@/ecr/levels";
 
-type Tab = "learners" | "grades";
+type Tab = "learners" | "groups" | "grades";
 
 export function SectionPage({
   schoolYear,
@@ -61,7 +62,7 @@ export function SectionPage({
   const males = learners.filter((l) => l.sex === "M").length;
 
   return (
-    <div className="mx-auto max-w-6xl p-8">
+    <div className="page">
       <PageHeader
         title={`${gradeLabel(section.grade_level)} – ${section.name}`}
         description={[
@@ -89,6 +90,7 @@ export function SectionPage({
       <Tabs value={tab} onValueChange={(v) => setTab(v as Tab)} className="mt-6">
         <TabsList>
           <TabsTrigger value="learners">Learners ({learners.length})</TabsTrigger>
+          <TabsTrigger value="groups">Groups</TabsTrigger>
           {section.is_advisory && <TabsTrigger value="grades">Grades</TabsTrigger>}
         </TabsList>
       </Tabs>
@@ -101,6 +103,7 @@ export function SectionPage({
             <SectionLearners sectionId={section.id} learners={learners} reload={reloadAll} onError={onError} />
           </>
         )}
+        {tab === "groups" && <SectionGroups sectionId={section.id} learners={learners} onError={onError} />}
         {tab === "grades" && section.is_advisory && (
           <SectionGrades
             section={section}

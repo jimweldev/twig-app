@@ -34,6 +34,8 @@ export interface PacketActivity {
   component: Component;
   position: number;
   highest_score: number;
+  /** MAPEH: "MA" or "PEH". Absent for other learning areas and in older files. */
+  part?: string;
 }
 
 export interface GradePacket {

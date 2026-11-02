@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <!-- A4: the leaf is the whole right arm, nearly level, so the T silhouette stays strong. -->
+  <rect x="112" y="72" width="32" height="156" rx="16"/>
+  <rect x="32" y="72" width="104" height="32" rx="16"/>
+  <path d="M128 92 A76 76 0 0 1 228 56 A76 76 0 0 1 128 92 Z"/>
+</svg>

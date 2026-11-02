@@ -1,13 +1,13 @@
 import { describe, expect, it } from "vitest";
+import { computeTerm, descriptor, orderedAreas, finalGrade, transmute, type ActivityLike } from "@/ecr/grading";
 import {
-  computeTerm,
-  descriptor,
-  orderedAreas,
-  finalGrade,
-  transmute,
-  type ActivityLike,
-} from "@/ecr/grading";
-import { gradingModeFor, numericSchemeFor, usesTransmutation, type NumericScheme } from "@/ecr/levels";
+  gradingModeFor,
+  numericSchemeFor,
+  parseCustomScheme,
+  serializeScheme,
+  usesTransmutation,
+  type NumericScheme,
+} from "@/ecr/levels";
 
 const CORE: NumericScheme = { weights: { WW: 0.2, PT: 0.5, EX: 0.3 }, exam: "split" };
 const SKILLS: NumericScheme = { weights: { WW: 0.2, PT: 0.6, EX: 0.2 }, exam: "split" };
@@ -138,7 +138,9 @@ describe("exam modes and zero-based grading", () => {
   });
 
   it("skips transmutation from SY 2027-2028 with a floor of 60", () => {
-    expect(computeTerm(acts, (id) => scores[id], CORE, false)!.termGrade).toBe(Math.round(16 + 45 + 0.3 * (20 * 0.3 + 0 * 0.3 + 100 * 0.4)));
+    expect(computeTerm(acts, (id) => scores[id], CORE, false)!.termGrade).toBe(
+      Math.round(16 + 45 + 0.3 * (20 * 0.3 + 0 * 0.3 + 100 * 0.4)),
+    );
     expect(computeTerm(acts, () => 0, CORE, false)!.termGrade).toBe(60);
     expect(usesTransmutation("2026-2027")).toBe(true);
     expect(usesTransmutation("2027-2028")).toBe(false);
@@ -175,5 +177,21 @@ describe("levels", () => {
       "General Science",
       "Effective Communication",
     ]);
+  });
+});
+
+describe("custom weights", () => {
+  const english = { grade_level: 7, learning_area: "English", subject_type: "" };
+
+  it("uses a subject's own weights when they add up to 100%", () => {
+    const weights = serializeScheme({ weights: { WW: 0.25, PT: 0.45, EX: 0.3 }, exam: "te" });
+    expect(numericSchemeFor({ ...english, weights })).toEqual({ weights: { WW: 0.25, PT: 0.45, EX: 0.3 }, exam: "te" });
+  });
+
+  it("falls back to DepEd's weights when blank or unusable", () => {
+    expect(numericSchemeFor({ ...english, weights: "" }).weights).toEqual({ WW: 0.2, PT: 0.5, EX: 0.3 });
+    expect(parseCustomScheme('{"WW":0.5,"PT":0.5,"EX":0.3}')).toBeNull();
+    expect(parseCustomScheme('{"WW":0.5,"PT":0.4,"EX":0.1,"exam":"none"}')).toBeNull();
+    expect(parseCustomScheme("not json")).toBeNull();
   });
 });

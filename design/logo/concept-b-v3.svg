@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <!-- B: Sprouting check. The check's long stroke grows on, and a leaf branches off it like a new shoot. -->
+  <path d="M46 140 L98 192 L202 64" fill="none" stroke="#000" stroke-width="32" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M152 128 A60 60 0 0 1 236 88 A60 60 0 0 1 152 128 Z"/>
+</svg>

@@ -38,11 +38,25 @@ export interface NumericScheme {
 const CORE: Weights = { WW: 0.2, PT: 0.5, EX: 0.3 };
 const SKILLS: Weights = { WW: 0.2, PT: 0.6, EX: 0.2 };
 
+/** A part of a learning area scored on its own sheet, e.g. Music and Arts in MAPEH. */
+export interface AreaPart {
+  /** Stored on each activity. */
+  id: string;
+  label: string;
+}
+
 export interface LearningArea {
   name: string;
   weights: Weights;
   grades: number[];
+  /** Parts scored separately; the term grade is the average of their term grades. */
+  parts?: AreaPart[];
 }
+
+const MAPEH_PARTS: AreaPart[] = [
+  { id: "MA", label: "Music and Arts" },
+  { id: "PEH", label: "PE and Health" },
+];
 
 export const LEARNING_AREAS: LearningArea[] = [
   // Key Stage 1 (MATATAG). Grades 2-3 use 20/50/30 while still numerically graded.
@@ -59,8 +73,19 @@ export const LEARNING_AREAS: LearningArea[] = [
   { name: "Values Education", weights: CORE, grades: [7, 8, 9, 10] },
   { name: "EPP", weights: SKILLS, grades: [4, 5, 6] },
   { name: "TLE", weights: SKILLS, grades: [7, 8, 9, 10] },
-  { name: "MAPEH", weights: SKILLS, grades: [4, 5, 6, 7, 8, 9, 10] },
+  { name: "MAPEH", weights: SKILLS, grades: [4, 5, 6, 7, 8, 9, 10], parts: MAPEH_PARTS },
 ];
+
+/** The parts a learning area is scored in; none for most. */
+export const partsOf = (learningArea: string): AreaPart[] =>
+  LEARNING_AREAS.find((a) => a.name === learningArea)?.parts ?? [];
+
+/** The name imported grades for one part are saved under, e.g. "MAPEH/MA". */
+export const partArea = (learningArea: string, partId: string) => `${learningArea}/${partId}`;
+
+/** Imported grades for one part of a learning area, which isn't a learning area of its own. */
+export const isPartArea = (name: string) =>
+  LEARNING_AREAS.some((a) => a.parts?.some((p) => partArea(a.name, p.id) === name));
 
 export const areasForGrade = (grade: number) => LEARNING_AREAS.filter((a) => a.grades.includes(grade));
 
@@ -79,7 +104,14 @@ export interface SubjectType {
 export const SUBJECT_TYPES: SubjectType[] = [
   // Strengthened SHS curriculum (Grade 11 from SY 2026-2027; Grade 12 in pilot schools)
   { id: "sshs-core", label: "Core subject", category: "Core", weights: CORE, exam: "split", grades: [11, 12] },
-  { id: "sshs-academic", label: "Academic elective", category: "Applied and Specialized", weights: CORE, exam: "split", grades: [11, 12] },
+  {
+    id: "sshs-academic",
+    label: "Academic elective",
+    category: "Applied and Specialized",
+    weights: CORE,
+    exam: "split",
+    grades: [11, 12],
+  },
   {
     id: "sshs-field",
     label: "Field Exposure / Arts Apprenticeship / Creative Production and Innovation",
@@ -88,7 +120,14 @@ export const SUBJECT_TYPES: SubjectType[] = [
     exam: "te",
     grades: [11, 12],
   },
-  { id: "sshs-asw", label: "Arts, Sports, Health and Wellness elective", category: "Applied and Specialized", weights: SKILLS, exam: "split", grades: [11, 12] },
+  {
+    id: "sshs-asw",
+    label: "Arts, Sports, Health and Wellness elective",
+    category: "Applied and Specialized",
+    weights: SKILLS,
+    exam: "split",
+    grades: [11, 12],
+  },
   {
     id: "sshs-research",
     label: "Research elective / Design and Innovation",
@@ -115,7 +154,14 @@ export const SUBJECT_TYPES: SubjectType[] = [
   },
   // Grade 12 not yet on the strengthened curriculum: DO 8, s. 2015 weights
   // with the adjusted transmutation table.
-  { id: "do8-core", label: "Core subject (old curriculum)", category: "Core", weights: { WW: 0.25, PT: 0.5, EX: 0.25 }, exam: "split", grades: [12] },
+  {
+    id: "do8-core",
+    label: "Core subject (old curriculum)",
+    category: "Core",
+    weights: { WW: 0.25, PT: 0.5, EX: 0.25 },
+    exam: "split",
+    grades: [12],
+  },
   {
     id: "do8-academic",
     label: "Academic track subject (old curriculum)",
@@ -155,12 +201,56 @@ export const SHS_CORE_SUBJECTS = [
 ];
 
 /** Weights and exam structure of one class record. */
-export function numericSchemeFor(c: { grade_level: number; learning_area: string; subject_type: string }): NumericScheme {
+export const EXAM_MODES: { value: ExamMode; label: string }[] = [
+  { value: "split", label: "ST 1 + ST 2 + Term exam" },
+  { value: "te", label: "Term exam only" },
+  { value: "none", label: "No exams" },
+];
+
+/**
+ * A subject's own weights from their stored JSON, or null when blank or not usable.
+ * Weights must be 0-1 and add up to 1; with no exams, the exam weight must be 0.
+ */
+export function parseCustomScheme(json: string | undefined): NumericScheme | null {
+  if (!json?.trim()) return null;
+  try {
+    const v = JSON.parse(json) as Partial<Weights> & { exam?: ExamMode };
+    const weights = { WW: Number(v.WW), PT: Number(v.PT), EX: Number(v.EX) };
+    const exam = EXAM_MODES.some((m) => m.value === v.exam) ? v.exam! : "split";
+    const parts = [weights.WW, weights.PT, weights.EX];
+    if (parts.some((w) => !Number.isFinite(w) || w < 0 || w > 1)) return null;
+    if (Math.abs(parts.reduce((a, b) => a + b, 0) - 1) > 0.001) return null;
+    if (exam === "none" && weights.EX !== 0) return null;
+    return { weights, exam };
+  } catch {
+    return null;
+  }
+}
+
+/** A custom scheme as stored on the subject. */
+export const serializeScheme = (s: NumericScheme) => JSON.stringify({ ...s.weights, exam: s.exam });
+
+/** The DepEd weights for a subject, ignoring any custom ones. */
+export function defaultSchemeFor(c: {
+  grade_level: number;
+  learning_area: string;
+  subject_type: string;
+}): NumericScheme {
   if (isSeniorHigh(c.grade_level)) {
     const t = subjectTypeOf(c.subject_type) ?? SUBJECT_TYPES[0];
     return { weights: t.weights, exam: t.exam };
   }
   return { weights: LEARNING_AREAS.find((a) => a.name === c.learning_area)?.weights ?? CORE, exam: "split" };
+}
+
+/** How a subject is graded: its own weights when set, else DepEd's. */
+export function numericSchemeFor(c: {
+  grade_level: number;
+  learning_area: string;
+  subject_type: string;
+  weights?: string;
+}): NumericScheme {
+  return parseCustomScheme(c.weights) ?? defaultSchemeFor(c);
 }
 
 /** Terms a class record runs, from its stored "1,2,3" list. */

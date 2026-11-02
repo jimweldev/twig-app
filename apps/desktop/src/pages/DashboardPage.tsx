@@ -7,8 +7,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { TERMS } from "@/ecr/grading";
-import { gradeLabel, parseTerms } from "@/ecr/levels";
-import { listGradedTerms, listReceivedAreas } from "@/lib/db";
+import { gradeLabel, isPartArea, parseTerms } from "@/ecr/levels";
+import { listGradedTerms, listReceivedAreas, listSectionFinalizedTerms } from "@/lib/db";
 
 function Stat({
   icon: Icon,
@@ -49,37 +49,50 @@ export function DashboardPage() {
   const { profile, activeYear, sections, classes, onError } = useSchool();
   const [received, setReceived] = useState<{ section_id: number; learning_area: string }[]>([]);
   const [graded, setGraded] = useState<Map<string, Set<number>>>(new Map());
+  const [finalized, setFinalized] = useState<Map<number, Set<number>>>(new Map());
   const advisory = sections.find((s) => s.is_advisory);
 
   useEffect(() => {
     if (activeYear) listReceivedAreas(activeYear.id).then(setReceived, onError);
   }, [activeYear, onError]);
   useEffect(() => {
-    if (advisory) listGradedTerms(advisory.id).then(setGraded, onError);
+    if (advisory) {
+      listGradedTerms(advisory.id).then(setGraded, onError);
+      listSectionFinalizedTerms(advisory.id).then(setFinalized, onError);
+    }
   }, [advisory, onError]);
 
   const name = profile?.teacher_name.trim();
   const learners = sections.reduce((n, s) => n + s.learner_count, 0);
+  // Subjects you teach: no other teacher named, or your own name typed in.
+  const mine = classes.filter((c) => {
+    const t = c.teacher.trim().toLowerCase();
+    return !t || t === name?.toLowerCase();
+  });
 
   // Advisory class: the subjects the section has (its class records and imported grades),
-  // and which of their terms have grades yet.
+  // and which of their terms are finalized. Imported-only subjects can't be finalized,
+  // so for those a term counts once it has grades.
   const subjects = advisory
     ? [
         ...classes.filter((c) => c.section_id === advisory.id).map((c) => c.learning_area),
-        ...received.filter((r) => r.section_id === advisory.id).map((r) => r.learning_area),
+        ...received
+          .filter((r) => r.section_id === advisory.id && !isPartArea(r.learning_area))
+          .map((r) => r.learning_area),
       ].filter((a, i, all) => all.indexOf(a) === i)
     : [];
   const advisoryAreas = subjects.map((area) => {
     // A class record says which terms the subject runs; imported-only subjects run all three.
     const own = classes.find((c) => c.section_id === advisory?.id && c.learning_area === area);
     const terms = own ? parseTerms(own.terms) : TERMS;
-    return { area, terms: terms.map((t) => ({ term: t, ready: !!graded.get(area)?.has(t) })) };
+    const ready = (t: number) => (own ? !!finalized.get(own.id)?.has(t) : !!graded.get(area)?.has(t));
+    return { area, classId: own?.id, terms: terms.map((t) => ({ term: t, ready: ready(t) })) };
   });
   const allTerms = advisoryAreas.flatMap((a) => a.terms);
   const done = allTerms.filter((t) => t.ready).length;
 
   return (
-    <div className="mx-auto max-w-6xl p-8">
+    <div className="page">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">
           {greeting()}
@@ -128,7 +141,7 @@ export function DashboardPage() {
             <Card>
               <CardHeader>
                 <CardTitle>Class records</CardTitle>
-                <CardDescription>Learning areas you teach this school year</CardDescription>
+                <CardDescription>Subjects you teach this school year</CardDescription>
                 <CardAction>
                   <Button variant="ghost" size="sm" onClick={() => navigate({ page: "classRecords" })}>
                     View all <ArrowRight />
@@ -136,7 +149,7 @@ export function DashboardPage() {
                 </CardAction>
               </CardHeader>
               <CardContent>
-                {classes.length === 0 ? (
+                {mine.length === 0 ? (
                   <p className="text-sm text-muted-foreground">
                     No class records yet.{" "}
                     <button
@@ -149,7 +162,7 @@ export function DashboardPage() {
                   </p>
                 ) : (
                   <ul className="divide-y">
-                    {classes.slice(0, 6).map((c) => (
+                    {mine.slice(0, 6).map((c) => (
                       <li key={c.id}>
                         <button
                           type="button"
@@ -212,7 +225,7 @@ export function DashboardPage() {
                 ) : (
                   <>
                     <div className="flex justify-between text-sm">
-                      <span>Terms with grades</span>
+                      <span>Terms finalized</span>
                       <span className="text-muted-foreground tabular-nums">
                         {done} / {allTerms.length}
                       </span>
@@ -228,16 +241,34 @@ export function DashboardPage() {
                         <li key={a.area} className="flex items-center justify-between gap-3 py-1.5">
                           <span className="truncate font-medium">{a.area}</span>
                           <span className="flex shrink-0 gap-1">
-                            {a.terms.map((t) => (
-                              <Badge
-                                key={t.term}
-                                variant={t.ready ? "default" : "outline"}
-                                className={t.ready ? undefined : "text-muted-foreground"}
-                                title={`Term ${t.term}: ${t.ready ? "has grades" : "no grades yet"}`}
-                              >
-                                {t.ready && <Check />}T{t.term}
-                              </Badge>
-                            ))}
+                            {a.terms.map((t) => {
+                              const title = a.classId
+                                ? `Term ${t.term}: ${t.ready ? "finalized" : "not finalized yet"}`
+                                : `Term ${t.term}: ${t.ready ? "grades imported" : "no grades yet"}`;
+                              const chip = (
+                                <>
+                                  {t.ready && <Check />}T{t.term}
+                                </>
+                              );
+                              const variant = t.ready ? "default" : "outline";
+                              const muted = t.ready ? undefined : "text-muted-foreground";
+                              return a.classId ? (
+                                <Badge key={t.term} asChild variant={variant} className={muted}>
+                                  <button
+                                    type="button"
+                                    title={`${title} · open the class record`}
+                                    className="cursor-pointer hover:opacity-80"
+                                    onClick={() => navigate({ page: "class", id: a.classId!, term: t.term })}
+                                  >
+                                    {chip}
+                                  </button>
+                                </Badge>
+                              ) : (
+                                <Badge key={t.term} variant={variant} className={muted} title={title}>
+                                  {chip}
+                                </Badge>
+                              );
+                            })}
                           </span>
                         </li>
                       ))}

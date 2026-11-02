@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
+import { PageSkeleton } from "@/components/page";
 import {
   AlignCenter,
   AlignHorizontalJustifyCenter,
@@ -6,15 +7,16 @@ import {
   AlignRight,
   Bold,
   CaseUpper,
-  Check,
   ImageUp,
   Italic,
   Loader2,
+  Save,
   Plus,
-  Printer,
+  FileDown,
   Trash2,
 } from "lucide-react";
 import { cn } from "cn";
+import { useLeaveGuard } from "@/app/router";
 import { useSchool } from "@/app/school";
 import { CertificateCanvas } from "@/certificates/CertificateCanvas";
 import {
@@ -42,7 +44,7 @@ import {
   type Recipients,
   type CertKind,
 } from "@/certificates/fields";
-import { readCertificateImage } from "@/certificates/image";
+import { CertificateImagePicker } from "@/certificates/CertificateImagePicker";
 import { PrintCertificatesDialog } from "@/certificates/PrintCertificatesDialog";
 import { Field } from "@/components/field";
 import { SimpleSelect } from "@/components/simple-select";
@@ -54,11 +56,10 @@ import {
   getCertificateTemplate,
   replaceCertificateImage,
   updateCertificateTemplate,
+  type CertificateImage,
   type CertificateTemplate,
 } from "@/lib/db";
-import { ImagePicker } from "./CertificatesPage";
-
-const SAVE_DELAY_MS = 400;
+import { toast } from "sonner";
 
 function Setting({ label, children }: { label: string; children: ReactNode }) {
   return (
@@ -101,43 +102,79 @@ const FIELD_HINTS: Partial<Record<CertFieldKey, string>> = {
   school_head: "The school head from your school profile.",
 };
 
-/** Drag the learner's name and other values onto the uploaded design and style them. Changes save as you go. */
+/** What Save writes; the image saves on its own when replaced. */
+const savedPart = (t: CertificateTemplate) =>
+  JSON.stringify({ name: t.name, fields: t.fields, recipients: t.recipients, kind: t.kind });
+
+/** Drag the learner's name and other values onto the uploaded design and style them. Changes are kept until Save. */
 export function CertificateEditorPage({ id }: { id: number }) {
   const { profile, activeYear, onError } = useSchool();
   const [template, setTemplate] = useState<CertificateTemplate | null | undefined>(undefined);
   const [selectedId, setSelectedId] = useState<string | null>("name");
-  const [saving, setSaving] = useState<"idle" | "pending" | "saved">("idle");
+  // The template as last saved, to tell whether there are changes to save.
+  const [saved, setSaved] = useState<CertificateTemplate | null>(null);
+  const [saving, setSaving] = useState(false);
   const [printOpen, setPrintOpen] = useState(false);
   // The made-up learner's average, so the teacher can see each honor's text in place.
   const [sampleAverage, setSampleAverage] = useState(SAMPLE_LEARNER.average);
-  const dirty = useRef(false);
 
   useEffect(() => {
-    getCertificateTemplate(id).then(setTemplate, onError);
+    getCertificateTemplate(id).then((t) => {
+      setTemplate(t);
+      setSaved(t);
+    }, onError);
   }, [id, onError]);
 
-  // Save a moment after the last change, so a drag is one write instead of hundreds.
-  useEffect(() => {
-    if (!template || !dirty.current) return;
-    setSaving("pending");
-    const t = setTimeout(() => {
-      dirty.current = false;
-      updateCertificateTemplate(template.id, { ...template, name: template.name.trim() || "Certificate" }).then(
-        () => setSaving("saved"),
-        onError,
-      );
-    }, SAVE_DELAY_MS);
-    return () => clearTimeout(t);
-  }, [template, onError]);
+  const dirty = !!template && !!saved && savedPart(template) !== savedPart(saved);
 
-  const edit = (patch: Partial<CertificateTemplate>) => {
-    dirty.current = true;
-    setTemplate((t) => (t ? { ...t, ...patch } : t));
+  const save = async () => {
+    if (!template) return false;
+    setSaving(true);
+    try {
+      const next = { ...template, name: template.name.trim() || "Certificate" };
+      await updateCertificateTemplate(next.id, next);
+      setTemplate(next);
+      setSaved(next);
+      toast.success("Template saved");
+      return true;
+    } catch (e) {
+      onError(e);
+      return false;
+    } finally {
+      setSaving(false);
+    }
   };
-  const changeField = (fieldId: string, patch: Partial<CertField>) => {
-    dirty.current = true;
+
+  useLeaveGuard(
+    dirty
+      ? {
+          title: "Save the template?",
+          description: "You have changes that aren't saved yet.",
+          keepLabel: "Save and continue",
+          discardLabel: "Discard changes",
+          onKeep: async () => {
+            if (!(await save())) throw new Error("Not saved");
+          },
+          onDiscard: () => setTemplate(saved),
+        }
+      : null,
+  );
+
+  // Ctrl+S saves, as in most programs.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
+        e.preventDefault();
+        if (dirty) save();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  });
+
+  const edit = (patch: Partial<CertificateTemplate>) => setTemplate((t) => (t ? { ...t, ...patch } : t));
+  const changeField = (fieldId: string, patch: Partial<CertField>) =>
     setTemplate((t) => (t ? { ...t, fields: t.fields.map((f) => (f.id === fieldId ? { ...f, ...patch } : f)) } : t));
-  };
 
   // Arrow keys nudge the selected field; Shift moves it further.
   useEffect(() => {
@@ -149,7 +186,6 @@ export function CertificateEditorPage({ id }: { id: number }) {
       const d = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] }[e.key];
       if (!d) return;
       e.preventDefault();
-      dirty.current = true;
       setTemplate((t) =>
         t
           ? {
@@ -171,18 +207,14 @@ export function CertificateEditorPage({ id }: { id: number }) {
     return () => window.removeEventListener("keydown", onKey);
   }, [selectedId]);
 
-  const replaceImage = async (file: File) => {
+  const replaceImage = async (img: CertificateImage) => {
     if (!template) return;
-    try {
-      const img = await readCertificateImage(file);
-      await replaceCertificateImage(template.id, img);
-      setTemplate({ ...template, ...img });
-    } catch (e) {
-      onError(e);
-    }
+    await replaceCertificateImage(template.id, img);
+    setTemplate({ ...template, ...img });
+    setSaved((s) => (s ? { ...s, ...img } : s));
   };
 
-  if (template === undefined) return null;
+  if (template === undefined) return <PageSkeleton className="page-wide" rows={3} />;
   if (template === null) {
     return <p className="p-8 text-sm text-muted-foreground">This template was deleted.</p>;
   }
@@ -212,7 +244,7 @@ export function CertificateEditorPage({ id }: { id: number }) {
   const fieldLabel = (f: CertField) => (f.key === "text" ? f.text.trim() || FIELD_LABELS.text : FIELD_LABELS[f.key]);
 
   return (
-    <div className="mx-auto flex max-w-7xl flex-col gap-4 p-6">
+    <div className="page-wide flex flex-col gap-4">
       <div className="flex flex-wrap items-center gap-3">
         <Input
           aria-label="Template name"
@@ -220,24 +252,16 @@ export function CertificateEditorPage({ id }: { id: number }) {
           value={template.name}
           onChange={(e) => edit({ name: e.target.value })}
         />
-        <span className="flex items-center gap-1 text-xs text-muted-foreground">
-          {saving === "pending" && (
-            <>
-              <Loader2 className="size-3.5 animate-spin" /> Saving…
-            </>
-          )}
-          {saving === "saved" && (
-            <>
-              <Check className="size-3.5" /> Saved
-            </>
-          )}
-        </span>
+        {dirty && <span className="text-xs text-muted-foreground">Unsaved changes</span>}
         <div className="ml-auto flex gap-2">
-          <ImagePicker variant="outline" onFile={replaceImage}>
+          <CertificateImagePicker variant="outline" onImage={replaceImage}>
             <ImageUp /> Replace image
-          </ImagePicker>
-          <Button onClick={() => setPrintOpen(true)}>
-            <Printer /> Print
+          </CertificateImagePicker>
+          <Button variant="outline" onClick={() => setPrintOpen(true)}>
+            <FileDown /> Download PDF
+          </Button>
+          <Button disabled={!dirty || saving} onClick={save} title="Save template (Ctrl+S)">
+            {saving ? <Loader2 className="animate-spin" /> : <Save />} Save template
           </Button>
         </div>
       </div>

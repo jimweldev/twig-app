@@ -5,6 +5,7 @@ import type { ClassRecord, Learner } from "@/lib/db";
 import { displayName } from "@/lib/names";
 import type { LearnerGrades } from "./classGrades";
 import { ExportGradesDialog } from "./ExportGradesDialog";
+import { FinalizeTermControl, type useFinalizedTerms } from "./finalize";
 import { TERMS } from "./grading";
 import { DESCRIPTIVE_CODES } from "./levels";
 import { useDescriptiveRatings } from "./useDescriptiveRatings";
@@ -36,9 +37,11 @@ export function DescriptiveSheet({
   learners,
   imported,
   importButton,
+  finalized,
 }: {
   classRecord: ClassRecord;
   learners: Learner[];
+  finalized: ReturnType<typeof useFinalizedTerms>;
   /** Imported ratings; they replace the teacher's own for the terms imported. */
   imported: Map<number, LearnerGrades>;
   importButton: (shownTerm: null) => ReactNode;
@@ -50,6 +53,7 @@ export function DescriptiveSheet({
     const code = t === 4 ? g?.final : g?.terms[t - 1];
     return typeof code === "string" ? code : null;
   };
+  const locked = (t: number) => (t === 4 ? TERMS.every((x) => finalized.isLocked(x)) : finalized.isLocked(t));
   const codeOf = (learnerId: number, t: number) => importedCode(learnerId, t) ?? ownCodeOf(learnerId, t);
 
   const grades = new Map<number, LearnerGrades>(
@@ -77,6 +81,17 @@ export function DescriptiveSheet({
         </div>
       </div>
       <div className="min-h-0 flex-1 overflow-auto p-6">
+        <div className="mb-4 flex flex-wrap items-center gap-3">
+          {TERMS.map((t) => (
+            <FinalizeTermControl
+              key={t}
+              term={t}
+              finalizedAt={finalized.finalized.get(t)}
+              onFinalize={() => finalized.finalize(t)}
+              onUnfinalize={() => finalized.unfinalize(t)}
+            />
+          ))}
+        </div>
         <p className="mb-4 max-w-3xl text-sm text-muted-foreground">
           Under DO 015, s. 2026 this grade uses descriptive grading. Rate each learner from your assessments and
           observations; no numerical grade or general average is computed.
@@ -99,7 +114,10 @@ export function DescriptiveSheet({
                 {groups.map(([sex, label]) => (
                   <Fragment key={sex}>
                     <tr>
-                      <td colSpan={columns.length + 2} className="border border-stone-200 bg-stone-100 px-2 py-1 text-xs font-bold tracking-wide text-stone-600 uppercase">
+                      <td
+                        colSpan={columns.length + 2}
+                        className="border border-stone-200 bg-stone-100 px-2 py-1 text-xs font-bold tracking-wide text-stone-600 uppercase"
+                      >
                         {label}
                       </td>
                     </tr>
@@ -119,7 +137,7 @@ export function DescriptiveSheet({
                                 className={`border border-stone-200 p-0 ${code ? DESCRIPTIVE_COLORS[code] : ""} ${fromImport ? "italic" : ""}`}
                               >
                                 <select
-                                  disabled={fromImport}
+                                  disabled={fromImport || locked(t)}
                                   aria-label={`${displayName(l)} ${t === 4 ? "final" : `term ${t}`}`}
                                   value={code ?? ""}
                                   onChange={(e) => setCode(l.id, t, "", e.target.value || null)}
@@ -144,7 +162,9 @@ export function DescriptiveSheet({
           </Card>
         )}
         {learners.length === 0 && (
-          <p className="mt-4 text-sm text-muted-foreground">No learners in this section yet. Use the Learners button above.</p>
+          <p className="mt-4 text-sm text-muted-foreground">
+            No learners in this section yet. Use the Learners button above.
+          </p>
         )}
       </div>
     </div>

@@ -23,7 +23,7 @@ npm test                 # run grading tests
 ## Website and releases
 
 - **Download site:** https://jimweldev.github.io/twig-app/ — built from `apps/web` and published by `.github/workflows/website.yml` on every push to `main` that touches it.
-- **Windows installer:** `.github/workflows/release.yml` builds it and attaches it to a GitHub Release. Bump the version in `apps/desktop/src-tauri/tauri.conf.json`, then push a matching tag:
+- **Windows and Mac installers:** `.github/workflows/release.yml` builds both (the Mac app is universal: Apple silicon and Intel) and attaches them to a GitHub Release. Running the workflow by hand builds both without publishing. Bump the version in `apps/desktop/src-tauri/tauri.conf.json`, then push a matching tag:
 
   ```bash
   git tag v0.1.1

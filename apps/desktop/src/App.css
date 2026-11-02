@@ -134,6 +134,33 @@ body,
   html {
     @apply font-sans;
   }
+  /* Thin, quiet scrollbars everywhere: they darken on hover. */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in oklch, var(--muted-foreground) 35%, transparent) transparent;
+  }
+  *:hover {
+    scrollbar-color: color-mix(in oklch, var(--muted-foreground) 60%, transparent) transparent;
+  }
+  /* Compact on laptop screens; PDFs (print media) keep their own sizes. */
+  @media screen {
+    html {
+      font-size: 15px;
+    }
+  }
+}
+
+/* One frame for every page: the same padding, and one of three widths. */
+@layer components {
+  .page {
+    @apply mx-auto w-full max-w-6xl px-6 py-5;
+  }
+  .page-narrow {
+    @apply mx-auto w-full max-w-3xl px-6 py-5;
+  }
+  .page-wide {
+    @apply mx-auto w-full max-w-[96rem] px-6 py-5;
+  }
 }
 /* Report cards: on screen the print root is hidden; when printing, only it shows. */
 #print-root {
@@ -156,6 +183,9 @@ body,
   }
   #print-root {
     display: block;
+    /* Shaded cells and headers print on macOS too, where WebKit drops backgrounds by default. */
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
   }
   #print-root .report-page {
     break-after: page;
@@ -163,4 +193,20 @@ body,
   #print-root .report-page:last-child {
     break-after: auto;
   }
+}
+
+/* Rich text from the WYSIWYG editor, on screen and in PDFs: Tailwind's reset drops list markers. */
+.rich-text p {
+  margin: 0;
+}
+.rich-text ul {
+  list-style: disc;
+  padding-left: 1.25em;
+}
+.rich-text ol {
+  list-style: decimal;
+  padding-left: 1.5em;
+}
+.rich-text li > p {
+  margin: 0;
 }

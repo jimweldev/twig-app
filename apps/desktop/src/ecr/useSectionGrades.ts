@@ -8,14 +8,26 @@ import {
   type ReceivedGrade,
   type Section,
 } from "@/lib/db";
-import { gradingContext, loadClassGrades, withImported, type GradeValue, type LearnerGrades } from "./classGrades";
+import {
+  gradingContext,
+  loadClassGrades,
+  receivedFor,
+  withImported,
+  type GradeValue,
+  type LearnerGrades,
+  type PartGrades,
+} from "./classGrades";
 import { orderedAreas, PASSING_GRADE } from "./grading";
-import { gradingModeFor } from "./levels";
+import { gradingModeFor, isPartArea, partArea, partsOf } from "./levels";
 
-export type AreaSource =
+export type AreaSource = (
   | { area: string; kind: "local"; grades: Map<number, LearnerGrades>; subjectType?: string }
   | { area: string; kind: "received"; info: ReceivedGrade; grades: Map<number, LearnerGrades> }
-  | { area: string; kind: "missing"; grades: Map<number, LearnerGrades> };
+  | { area: string; kind: "missing"; grades: Map<number, LearnerGrades> }
+) & {
+  /** MAPEH: Music and Arts and PE and Health grades, shown under it on the report card. */
+  parts?: PartGrades[];
+};
 
 /**
  * A section's grades in every learning area, in the section's subject order.
@@ -53,19 +65,27 @@ export function useSectionGrades(
             .filter((r) => r.received_id === info.id)
             .map((r) => [r.learner_id, { terms: [r.term1, r.term2, r.term3], final: r.final }]),
         );
-      const localByArea = new Map(local.map(([area, grades, c]) => [area, { grades, c }]));
+      const localByArea = new Map(local.map(([area, loaded, c]) => [area, { ...loaded, c }]));
+      // Without a class record here, a part's grades can still come from a part teacher's file.
+      const receivedParts = (area: string): PartGrades[] => {
+        const parts = partsOf(area).map((part) => ({ part, ...receivedFor(received, partArea(area, part.id)) }));
+        return parts.some((x) => x.info) ? parts.map(({ part, grades }) => ({ part, grades })) : [];
+      };
       // Senior High subjects aren't in the standard list; include whatever the section has.
-      const present = [...local.map(([area]) => area), ...received.grades.map((g) => g.learning_area)];
+      const present = [
+        ...local.map(([area]) => area),
+        ...received.grades.map((g) => g.learning_area).filter((a) => !isPartArea(a)),
+      ];
       setAreas(
         orderedAreas(section.grade_level, order, present).map((area): AreaSource => {
           const mine = localByArea.get(area);
           const info = received.grades.find((r) => r.learning_area === area);
           if (mine) {
             const grades = info ? withImported(mine.grades, importedGrades(info), gradingContext(mine.c)) : mine.grades;
-            return { area, kind: "local", grades, subjectType: mine.c.subject_type };
+            return { area, kind: "local", grades, subjectType: mine.c.subject_type, parts: mine.parts };
           }
-          if (!info) return { area, kind: "missing", grades: new Map() };
-          return { area, kind: "received", info, grades: importedGrades(info) };
+          if (!info) return { area, kind: "missing", grades: new Map(), parts: receivedParts(area) };
+          return { area, kind: "received", info, grades: importedGrades(info), parts: receivedParts(area) };
         }),
       );
     } catch (e) {

@@ -1,4 +1,5 @@
-import { useEffect, useState, type KeyboardEvent } from "react";
+import { useEffect, useState, type ClipboardEvent, type KeyboardEvent, type ReactNode } from "react";
+import { toast } from "sonner";
 import { scoreKey, type Activity, type Learner } from "@/lib/db";
 import { computeTerm, PASSING_GRADE, type Component, type Term } from "@/ecr/grading";
 import type { GradingContext, LearnerGrades } from "./classGrades";
@@ -7,7 +8,7 @@ import { DescriptorLegend } from "./DescriptorLegend";
 import { Plus } from "lucide-react";
 import { ConfirmDelete } from "@/components/confirm-delete";
 import { Button } from "@/components/ui/button";
-
+import { parseClipboardGrid, planPaste } from "./paste";
 
 const fmt = (n: number) => n.toFixed(2);
 const EXAMS: [Component, string][] = [
@@ -49,6 +50,7 @@ function NumberCell({
   col,
   onCommit,
   className = "",
+  readOnly = false,
 }: {
   value: number | undefined;
   max?: number;
@@ -56,18 +58,28 @@ function NumberCell({
   col: number;
   onCommit: (n: number | null) => void;
   className?: string;
+  /** A finalized term: shown, not editable. */
+  readOnly?: boolean;
 }) {
   const [text, setText] = useState(value?.toString() ?? "");
   useEffect(() => setText(value?.toString() ?? ""), [value]);
 
   const parsed = text.trim() === "" ? null : Number(text);
-  const invalid =
-    parsed !== null && (Number.isNaN(parsed) || parsed < 0 || (max !== undefined && parsed > max));
+  const invalid = parsed !== null && (Number.isNaN(parsed) || parsed < 0 || (max !== undefined && parsed > max));
 
   const commit = () => {
     if (invalid || parsed === (value ?? null)) return;
     onCommit(parsed);
   };
+
+  // Finalized: plain text, so the cell can't be focused or pasted into; it can still be highlighted and copied.
+  if (readOnly) {
+    return (
+      <div className={`flex h-7 w-full items-center justify-center px-1 tabular-nums ${className}`}>
+        {value ?? ""}
+      </div>
+    );
+  }
 
   return (
     <input
@@ -103,6 +115,8 @@ export function TermSheet({
   onHps,
   onAddActivity,
   onDeleteActivity,
+  locked,
+  finalizeControl,
 }: {
   term: Term;
   learners: Learner[];
@@ -115,16 +129,22 @@ export function TermSheet({
   onHps: (activityId: number, hps: number) => void;
   onAddActivity: (component: "WW" | "PT") => void;
   onDeleteActivity: (activityId: number) => void;
+  /** The term is finalized: nothing on it can be changed. */
+  locked: boolean;
+  /** The Finalize / Unfinalize control for this term. */
+  finalizeControl: ReactNode;
 }) {
   const termActs = activities.filter((a) => a.term === term);
   const ww = termActs.filter((a) => a.component === "WW");
   const pt = termActs.filter((a) => a.component === "PT");
   const { weights, exam } = ctx.scheme;
   // Some Senior High subjects have only a term exam, or no Examinations component.
-  const exams = EXAMS.filter(([c]) => (exam === "split" ? true : exam === "te" ? c === "TE" : false)).map(([c, label]) => ({
-    label,
-    act: termActs.find((a) => a.component === c),
-  }));
+  const exams = EXAMS.filter(([c]) => (exam === "split" ? true : exam === "te" ? c === "TE" : false)).map(
+    ([c, label]) => ({
+      label,
+      act: termActs.find((a) => a.component === c),
+    }),
+  );
   const hasExam = exams.length > 0;
   const inputCols: Activity[] = [...ww, ...pt, ...exams.flatMap((e) => (e.act ? [e.act] : []))];
   const colOf = (a: Activity) => inputCols.indexOf(a);
@@ -132,6 +152,32 @@ export function TermSheet({
 
   const ordered = [...learners.filter((l) => l.sex === "M"), ...learners.filter((l) => l.sex === "F")];
   const totalCols = 2 + (ww.length + 3) + (pt.length + 3) + (hasExam ? exams.length + 2 : 0) + 2;
+
+  // A block copied from Excel or Google Sheets fills the cells from the one pasted into, like a spreadsheet.
+  const onPaste = (e: ClipboardEvent<HTMLTableElement>) => {
+    const at = (e.target as HTMLElement).dataset.cell;
+    if (!at || locked) return;
+    const grid = parseClipboardGrid(e.clipboardData.getData("text/plain"));
+    if (grid.length === 1 && grid[0].length === 1) return; // One value: an ordinary paste into the cell.
+    e.preventDefault();
+    const [row, col] = at.split(":").map(Number);
+    const plan = planPaste(
+      grid,
+      { row, col },
+      ordered.map((l) => l.id),
+      inputCols,
+    );
+    plan.hps.forEach((h) => onHps(h.activityId, h.value));
+    plan.scores.forEach((s) => onScore(s.activityId, s.learnerId, s.value));
+    const notes = [
+      plan.invalid && `${plan.invalid} cell(s) skipped: not a number, or above the highest possible score.`,
+      plan.outside && `${plan.outside} cell(s) didn't fit: add more columns or learners first.`,
+    ].filter(Boolean);
+    const pasted = plan.scores.length + plan.hps.length;
+    (notes.length ? toast.warning : toast.success)(`Pasted ${pasted} cell(s)`, {
+      description: notes.join(" ") || undefined,
+    });
+  };
 
   const th = "border border-stone-300 px-1 py-1 font-semibold";
   const td = "border border-stone-200 p-0";
@@ -144,25 +190,27 @@ export function TermSheet({
       <th key={a.id} className={`${th} group relative w-12 min-w-12`}>
         {prefix}
         {a.position}
-        <ConfirmDelete
-          title={`Delete ${name}?`}
-          description={
-            scored > 0
-              ? `This removes the column and ${scored} learner score(s) in it for Term ${term}. This cannot be undone.`
-              : `This removes the column from Term ${term}. No scores have been entered in it yet.`
-          }
-          confirmLabel="Delete column"
-          onConfirm={() => onDeleteActivity(a.id)}
-          trigger={
-            <button
-              type="button"
-              title={`Delete ${name}`}
-              className="absolute -top-0.5 right-0 text-[10px] leading-none text-red-600 opacity-0 group-hover:opacity-100 focus:opacity-100"
-            >
-              ×
-            </button>
-          }
-        />
+        {!locked && (
+          <ConfirmDelete
+            title={`Delete ${name}?`}
+            description={
+              scored > 0
+                ? `This removes the column and ${scored} learner score(s) in it for Term ${term}. This cannot be undone.`
+                : `This removes the column from Term ${term}. No scores have been entered in it yet.`
+            }
+            confirmLabel="Delete column"
+            onConfirm={() => onDeleteActivity(a.id)}
+            trigger={
+              <button
+                type="button"
+                title={`Delete ${name}`}
+                className="absolute -top-0.5 right-0 text-[10px] leading-none text-red-600 opacity-0 group-hover:opacity-100 focus:opacity-100"
+              >
+                ×
+              </button>
+            }
+          />
+        )}
       </th>
     );
   };
@@ -170,6 +218,7 @@ export function TermSheet({
   const hpsCell = (a: Activity) => (
     <td key={a.id} className={`${td} bg-amber-50/60`}>
       <NumberCell
+        readOnly={locked}
         value={a.highest_score || undefined}
         row={-1}
         col={colOf(a)}
@@ -192,6 +241,7 @@ export function TermSheet({
     const scoreCell = (a: Activity) => (
       <td key={a.id} className={td}>
         <NumberCell
+          readOnly={locked}
           value={scoreOf(a.id)}
           max={a.highest_score || undefined}
           row={r}
@@ -230,10 +280,7 @@ export function TermSheet({
           }`}
         >
           {fromImport ? (
-            <span
-              className="italic"
-              title={`Imported grade${result ? `. Your scores give ${result.termGrade}.` : ""}`}
-            >
+            <span className="italic" title={`Imported grade${result ? `. Your scores give ${result.termGrade}.` : ""}`}>
               {termGrade}
             </span>
           ) : (
@@ -246,7 +293,10 @@ export function TermSheet({
 
   const groupRow = (label: string) => (
     <tr key={label}>
-      <td colSpan={totalCols} className="border border-stone-300 bg-stone-100 px-2 py-1 text-xs font-bold uppercase tracking-wide text-stone-600">
+      <td
+        colSpan={totalCols}
+        className="border border-stone-300 bg-stone-100 px-2 py-1 text-xs font-bold uppercase tracking-wide text-stone-600"
+      >
         {label}
       </td>
     </tr>
@@ -255,18 +305,33 @@ export function TermSheet({
   return (
     <div className="flex h-full flex-col">
       <div className="flex items-center gap-2 border-b border-stone-200 bg-white px-6 py-2">
-        <Button variant="outline" size="sm" onClick={() => onAddActivity("WW")}><Plus /> Written Work</Button>
-        <Button variant="outline" size="sm" onClick={() => onAddActivity("PT")}><Plus /> Performance Task</Button>
+        {!locked && (
+          <>
+            <Button variant="outline" size="sm" onClick={() => onAddActivity("WW")}>
+              <Plus /> Written Work
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => onAddActivity("PT")}>
+              <Plus /> Performance Task
+            </Button>
+          </>
+        )}
+        {finalizeControl}
         <span className="ml-auto text-xs text-stone-500">
-          Type scores · Enter / arrow keys to move · Esc to undo · hover a column number to delete it
+          {locked
+            ? "Finalized: scores are locked. Unfinalize to edit."
+            : "Type or paste scores from Excel · Enter / arrow keys to move · Esc to undo · hover a column number to delete it"}
         </span>
       </div>
       <div className="min-h-0 flex-1 overflow-auto p-6">
-        <table className="border-collapse bg-white text-xs">
+        <table onPaste={onPaste} className="border-collapse bg-white text-xs">
           <thead className="text-stone-700">
             <tr className="bg-stone-100">
-              <th rowSpan={2} className={`${th} sticky left-0 z-20 w-8 min-w-8 bg-stone-100`}>#</th>
-              <th rowSpan={2} className={`${th} sticky left-8 z-20 bg-stone-100 text-left`}>Learner's name</th>
+              <th rowSpan={2} className={`${th} sticky left-0 z-20 w-8 min-w-8 bg-stone-100`}>
+                #
+              </th>
+              <th rowSpan={2} className={`${th} sticky left-8 z-20 bg-stone-100 text-left`}>
+                Learner's name
+              </th>
               <th colSpan={ww.length + 3} className={`${th} bg-sky-100`}>
                 Written Works ({weights.WW * 100}%)
               </th>
@@ -278,8 +343,12 @@ export function TermSheet({
                   Examinations ({weights.EX * 100}%)
                 </th>
               )}
-              <th rowSpan={2} className={`${th} w-14`}>Initial Grade</th>
-              <th rowSpan={2} className={`${th} w-14`}>Term Grade</th>
+              <th rowSpan={2} className={`${th} w-14`}>
+                Initial Grade
+              </th>
+              <th rowSpan={2} className={`${th} w-14`}>
+                Term Grade
+              </th>
             </tr>
             <tr className="bg-stone-50">
               {ww.map((a) => activityHeader(a, ""))}
@@ -291,7 +360,9 @@ export function TermSheet({
               <th className={`${th} w-14`}>PS</th>
               <th className={`${th} w-14`}>WS</th>
               {exams.map(({ label }) => (
-                <th key={label} className={`${th} w-14`}>{label}</th>
+                <th key={label} className={`${th} w-14`}>
+                  {label}
+                </th>
               ))}
               {hasExam && <th className={`${th} w-14`}>PS</th>}
               {hasExam && <th className={`${th} w-14`}>WS</th>}
@@ -325,7 +396,9 @@ export function TermSheet({
         </table>
         <DescriptorLegend className="mt-3" />
         {learners.length === 0 && (
-          <p className="mt-4 text-sm text-stone-500">No learners in this section yet. Use the Learners button above to add them.</p>
+          <p className="mt-4 text-sm text-stone-500">
+            No learners in this section yet. Use the Learners button above to add them.
+          </p>
         )}
       </div>
     </div>

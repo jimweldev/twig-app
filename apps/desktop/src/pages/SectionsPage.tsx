@@ -8,23 +8,10 @@ import { GRADE_OPTIONS, SimpleSelect } from "@/components/simple-select";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
   createSection,
   deleteSection,
@@ -92,7 +79,7 @@ export function SectionsPage({
   const grades = [...new Set(sections.map((s) => s.grade_level))];
 
   return (
-    <div className="mx-auto max-w-4xl p-8">
+    <div className="page">
       <PageHeader
         title="Sections"
         description={`SY ${schoolYear.name}${schoolYear.is_active ? " · active" : ""}`}
@@ -124,7 +111,10 @@ export function SectionsPage({
                 {grades.map((g) => (
                   <Fragment key={g}>
                     <TableRow className="bg-muted/50 hover:bg-muted/50">
-                      <TableCell colSpan={5} className="pl-4 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+                      <TableCell
+                        colSpan={5}
+                        className="pl-4 text-xs font-semibold tracking-wide text-muted-foreground uppercase"
+                      >
                         {gradeLabel(g)}
                       </TableCell>
                     </TableRow>
@@ -211,7 +201,11 @@ export function SectionsPage({
                   disabled={editing?.id !== null && sections.find((s) => s.id === editing?.id)!.class_count > 0}
                 />
               </Field>
-              <Field label="Section name" hint={duplicate ? "This grade already has a section with that name." : undefined}>
+              <Field
+                label="Section name"
+                required
+                hint={duplicate ? "This grade already has a section with that name." : undefined}
+              >
                 <Input
                   value={form.name}
                   autoFocus

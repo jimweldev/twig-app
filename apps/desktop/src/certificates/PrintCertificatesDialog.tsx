@@ -1,9 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { createPortal } from "react-dom";
-import { invoke } from "@tauri-apps/api/core";
-import { save } from "@tauri-apps/plugin-dialog";
-import { revealItemInDir } from "@tauri-apps/plugin-opener";
-import { CheckCircle2, FileDown, Loader2, Printer } from "lucide-react";
+import { FileDown, Loader2 } from "lucide-react";
 import { cn } from "cn";
 import { useSchool } from "@/app/school";
 import { Field } from "@/components/field";
@@ -22,6 +18,7 @@ import { gradeLabel } from "@/ecr/levels";
 import { averageIn, useSectionGrades } from "@/ecr/useSectionGrades";
 import { listLearners, type CertificateTemplate, type Learner, type Section } from "@/lib/db";
 import { displayName } from "@/lib/names";
+import { PdfRoot, usePdfDownload } from "@/lib/pdf";
 import { CertificateCanvas } from "./CertificateCanvas";
 import { GRADE_KEYS, HONOR_BANDS, honorBand, todayIso, type CertContext, type CertLearner } from "./fields";
 
@@ -62,7 +59,7 @@ function layout(template: CertificateTemplate, paper: Paper) {
   return { pageW, pageH, certW };
 }
 
-/** Choose learners and paper, then print one certificate per page. */
+/** Choose learners and paper, then download a PDF with one certificate per page. */
 export function PrintCertificatesDialog({
   template,
   open,
@@ -80,11 +77,8 @@ export function PrintCertificatesDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-4xl">
         <DialogHeader>
-          <DialogTitle>Print certificates</DialogTitle>
-          <DialogDescription>
-            One certificate per page. In the print window, choose your printer or “Save as PDF”. Under More settings,
-            set Margins to None and untick Headers and footers, or use Save as PDF, which never adds them.
-          </DialogDescription>
+          <DialogTitle>Download certificates</DialogTitle>
+          <DialogDescription>One PDF with one certificate per page, ready to print.</DialogDescription>
         </DialogHeader>
         {section ? (
           <PrintBody key={section.id} template={template} section={section} onSectionChange={setSectionId} />
@@ -114,9 +108,6 @@ function PrintBody({
   const [date, setDate] = useState(todayIso);
   const storageKey = awardsKey(template.id, section.id);
   const [awards, setAwards] = useState(() => loadAwards(storageKey));
-  // "print" opens the print window; a path saves a PDF there instead, with no header or footer.
-  const [printing, setPrinting] = useState<false | "print" | { pdf: string }>(false);
-  const [savedPdf, setSavedPdf] = useState<string | null>(null);
 
   useEffect(() => {
     listLearners(section.id).then(setLearners, onError);
@@ -170,46 +161,7 @@ function PrintBody({
   };
   const { pageW, pageH, certW } = layout(template, paper);
 
-  // Render the pages into the print root, wait for the design to decode, print or save, then remove them.
-  useEffect(() => {
-    if (!printing) return;
-    let cancelled = false;
-    const t = setTimeout(async () => {
-      const imgs = [...document.querySelectorAll<HTMLImageElement>("#print-root img")];
-      await Promise.all(imgs.map((img) => img.decode().catch(() => undefined)));
-      if (cancelled) return;
-      if (printing === "print") {
-        window.print();
-      } else {
-        try {
-          await invoke("save_pdf", { path: printing.pdf, widthIn: pageW, heightIn: pageH });
-          setSavedPdf(printing.pdf);
-        } catch (e) {
-          onError(e);
-        }
-      }
-      setPrinting(false);
-    }, 50);
-    return () => {
-      cancelled = true;
-      clearTimeout(t);
-    };
-  }, [printing, pageW, pageH, onError]);
-
-  const savePdf = async () => {
-    try {
-      const path = await save({
-        defaultPath: `${template.name} - ${gradeLabel(section.grade_level)} ${section.name}.pdf`,
-        filters: [{ name: "PDF", extensions: ["pdf"] }],
-      });
-      if (path) {
-        setSavedPdf(null);
-        setPrinting({ pdf: path });
-      }
-    } catch (e) {
-      onError(e);
-    }
-  };
+  const pdf = usePdfDownload(onError);
 
   const withHonors = learners.filter(hasHonor).length;
 
@@ -365,61 +317,40 @@ function PrintBody({
         </div>
       </div>
 
-      {savedPdf && (
-        <div className="flex items-center gap-2 rounded-md bg-primary/10 px-3 py-2 text-sm">
-          <CheckCircle2 className="size-4 shrink-0 text-primary" />
-          <span className="min-w-0 flex-1 truncate" title={savedPdf}>
-            Saved {savedPdf}
-          </span>
-          <Button size="sm" variant="outline" onClick={() => revealItemInDir(savedPdf).catch(onError)}>
-            Show in folder
-          </Button>
-        </div>
-      )}
-
       <DialogFooter>
         <Button
-          variant="outline"
-          title="Saves a PDF with no date, title or page number on it"
-          disabled={toPrint.length === 0 || !!printing || (needsGrades && loading)}
-          onClick={savePdf}
+          disabled={toPrint.length === 0 || pdf.downloading || (needsGrades && loading)}
+          onClick={() =>
+            pdf.download(`${template.name} - ${gradeLabel(section.grade_level)} ${section.name}`, {
+              widthIn: pageW,
+              heightIn: pageH,
+            })
+          }
         >
-          {typeof printing === "object" ? <Loader2 className="animate-spin" /> : <FileDown />} Save as PDF
-        </Button>
-        <Button
-          disabled={toPrint.length === 0 || !!printing || (needsGrades && loading)}
-          onClick={() => setPrinting("print")}
-        >
-          <Printer /> Print {toPrint.length === 1 ? "1 certificate" : `${toPrint.length} certificates`}
+          {pdf.downloading ? <Loader2 className="animate-spin" /> : <FileDown />} Download PDF (
+          {toPrint.length === 1 ? "1 certificate" : `${toPrint.length} certificates`})
         </Button>
       </DialogFooter>
 
-      {printing &&
-        createPortal(
-          <div id="print-root">
-            <style>{`@media print {
-              @page { size: ${pageW}in ${pageH}in; margin: 0; }
-              body > *:not(#print-root) { display: none !important; }
-              #print-root .cert-page { break-after: page; }
-              #print-root .cert-page:last-child { break-after: auto; }
-            }`}</style>
-            {toPrint.map((l) => (
-              <div
-                key={l.id}
-                className="cert-page flex items-center justify-center overflow-hidden"
-                style={{ width: `${pageW}in`, height: `${pageH}in` }}
-              >
-                <CertificateCanvas
-                  template={template}
-                  learner={certLearner(l)}
-                  context={context}
-                  style={{ width: `${certW}in` }}
-                />
-              </div>
-            ))}
-          </div>,
-          document.body,
-        )}
+      <PdfRoot
+        page={pdf.page}
+        pageCss="#print-root .cert-page { break-after: page; } #print-root .cert-page:last-child { break-after: auto; }"
+      >
+        {toPrint.map((l) => (
+          <div
+            key={l.id}
+            className="cert-page flex items-center justify-center overflow-hidden"
+            style={{ width: `${pageW}in`, height: `${pageH}in` }}
+          >
+            <CertificateCanvas
+              template={template}
+              learner={certLearner(l)}
+              context={context}
+              style={{ width: `${certW}in` }}
+            />
+          </div>
+        ))}
+      </PdfRoot>
     </>
   );
 }

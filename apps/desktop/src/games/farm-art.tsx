@@ -79,7 +79,11 @@ export function CssCowboy({
   style?: CSSProperties;
 }) {
   return (
-    <div className={`cb ${throwing ? "cb--throw" : ""} ${className ?? ""}`} style={{ fontSize: size, ...style }} aria-hidden>
+    <div
+      className={`cb ${throwing ? "cb--throw" : ""} ${className ?? ""}`}
+      style={{ fontSize: size, ...style }}
+      aria-hidden
+    >
       <span className="cb__boot cb__boot--l" />
       <span className="cb__boot cb__boot--r" />
       <span className="cb__leg cb__leg--l" />
@@ -89,7 +93,9 @@ export function CssCowboy({
       <span className="cb__vest cb__vest--r" />
       <span className="cb__belt" />
       <span className="cb__buckle" />
-      <span className="cb__arm cb__arm--down" />
+      <span className="cb__arm cb__arm--down">
+        <span className="cb__hand cb__hand--low" />
+      </span>
       <span className="cb__arm cb__arm--up">
         <span className="cb__hand" />
       </span>

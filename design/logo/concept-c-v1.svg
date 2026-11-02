@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <!-- C: Leaf of paper. A leaf (also an old word for a page) with ruled lines on one half. -->
+  <path fill-rule="evenodd" d="M128 20 A124 124 0 0 1 128 236 A124 124 0 0 1 128 20 Z
+    M122 60 L134 60 L134 236 L122 236 Z
+    M134 92 L196 92 L196 104 L134 104 Z
+    M134 128 L200 128 L200 140 L134 140 Z
+    M134 164 L196 164 L196 176 L134 176 Z"/>
+</svg>

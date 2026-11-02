@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <!-- W1: a real twig shaped like a t: tapered stem with a snipped base, a short stub, and a branch ending in a leaf. -->
+  <path d="M102 230 Q99 132 118 42 Q130 30 142 42 Q151 132 146 234 Z"/>
+  <path d="M124 88 Q96 82 66 80 Q52 90 66 102 Q96 104 122 114 Z"/>
+  <path d="M136 98 Q164 88 186 66 Q200 64 200 80 Q174 108 140 124 Z"/>
+  <path d="M184 80 A44 44 0 0 1 240 24 A44 44 0 0 1 184 80 Z"/>
+</svg>

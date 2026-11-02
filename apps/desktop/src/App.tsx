@@ -1,22 +1,13 @@
-import { Fragment, useEffect, type ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { X } from "lucide-react";
 import "./App.css";
-import { AppSidebar } from "@/app/AppSidebar";
+import { AppHeader, type Crumb } from "@/app/AppHeader";
+import { AppSidebar, useSidebarCollapsed } from "@/app/AppSidebar";
 import { RouterProvider, useRouter, type Route } from "@/app/router";
 import { SchoolProvider, useSchool } from "@/app/school";
-import { EmptyState } from "@/components/page";
-import {
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbLink,
-  BreadcrumbList,
-  BreadcrumbPage,
-  BreadcrumbSeparator,
-} from "@/components/ui/breadcrumb";
+import { EmptyState, PageSkeleton } from "@/components/page";
 import { Button } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
-import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
+import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ClassView } from "@/ecr/ClassView";
 import { AttendancePage } from "@/pages/AttendancePage";
@@ -27,8 +18,10 @@ import { CertificatesPage } from "@/pages/CertificatesPage";
 import { GAMES, GamePage, GamesPage } from "@/pages/GamesPage";
 import { LessonPlanEditorPage } from "@/pages/LessonPlanEditorPage";
 import { LessonPlansPage } from "@/pages/LessonPlansPage";
+import { QuizEditorPage } from "@/pages/QuizEditorPage";
+import { QuizzesPage } from "@/pages/QuizzesPage";
 import { DashboardPage } from "@/pages/DashboardPage";
-import { ProfilePage } from "@/pages/ProfilePage";
+import { SettingsPage } from "@/pages/SettingsPage";
 import { ReportCardsPage } from "@/pages/ReportCardsPage";
 import { SchoolYearsPage } from "@/pages/SchoolYearsPage";
 import { SectionPage } from "@/pages/SectionPage";
@@ -39,8 +32,6 @@ const inTauri = "__TAURI_INTERNALS__" in window;
 
 // Keep the splash up long enough to read, so it doesn't just flicker.
 const MIN_SPLASH_MS = 900;
-
-type Crumb = { label: string; route?: Route };
 
 function useCrumbs(): Crumb[] {
   const { route } = useRouter();
@@ -82,6 +73,10 @@ function useCrumbs(): Crumb[] {
       return [{ label: "Lesson plans" }];
     case "lessonPlan":
       return [{ label: "Lesson plans", route: { page: "lessonPlans" } }, { label: "Edit lesson plan" }];
+    case "quizzes":
+      return [{ label: "Quizzes" }];
+    case "quiz":
+      return [{ label: "Quizzes", route: { page: "quizzes" } }, { label: "Edit quiz" }];
     case "certificates":
       return [{ label: "Certificates" }];
     case "certificate":
@@ -100,8 +95,8 @@ function useCrumbs(): Crumb[] {
           ]
         : [{ label: "Games", route: { page: "games" } }, { label: GAMES[route.game].title }];
     }
-    case "profile":
-      return [{ label: "School profile" }];
+    case "settings":
+      return [{ label: "Settings" }];
   }
 }
 
@@ -111,7 +106,7 @@ function RequireActiveYear({ children }: { children: ReactNode }) {
   const { navigate } = useRouter();
   if (activeYear) return children;
   return (
-    <div className="mx-auto max-w-xl p-8">
+    <div className="page-narrow">
       <EmptyState title="No active school year">
         <p>Sections and class records belong to the active school year.</p>
         <Button className="mt-4" onClick={() => navigate({ page: "schoolYears" })}>
@@ -125,7 +120,7 @@ function RequireActiveYear({ children }: { children: ReactNode }) {
 function NotFound() {
   const { navigate } = useRouter();
   return (
-    <div className="mx-auto max-w-xl p-8">
+    <div className="page-narrow">
       <EmptyState title="This page is no longer available">
         <p>It may have been deleted, or it belongs to a school year that is not active.</p>
         <Button className="mt-4" variant="outline" onClick={() => navigate({ page: "dashboard" })}>
@@ -183,7 +178,11 @@ function Page() {
     }
     case "class": {
       const c = classes.find((x) => x.id === route.id);
-      return c ? <ClassView key={c.id} classRecord={c} /> : <NotFound />;
+      return c ? (
+        <ClassView key={`${c.id}:${route.term ?? ""}`} classRecord={c} initialTerm={route.term} />
+      ) : (
+        <NotFound />
+      );
     }
     case "attendance":
       return (
@@ -201,6 +200,10 @@ function Page() {
       return <LessonPlansPage />;
     case "lessonPlan":
       return <LessonPlanEditorPage key={route.id} id={route.id} />;
+    case "quizzes":
+      return <QuizzesPage />;
+    case "quiz":
+      return <QuizEditorPage key={route.id} id={route.id} />;
     case "certificates":
       return <CertificatesPage />;
     case "certificate":
@@ -213,17 +216,26 @@ function Page() {
       );
     case "game": {
       const section = sections.find((s) => s.id === route.sectionId);
-      return section ? <GamePage key={section.id} game={route.game} section={section} /> : <NotFound />;
+      return section ? (
+        <GamePage
+          key={`${section.id}:${route.groupsId ?? ""}`}
+          game={route.game}
+          section={section}
+          groupsId={route.groupsId}
+        />
+      ) : (
+        <NotFound />
+      );
     }
-    case "profile":
-      return <ProfilePage onSaved={refresh} onError={onError} />;
+    case "settings":
+      return <SettingsPage tab={route.tab} onSaved={refresh} onError={onError} />;
   }
 }
 
 function Shell() {
-  const { navigate } = useRouter();
-  const { loaded, error, clearError } = useSchool();
+  const { loaded } = useSchool();
   const crumbs = useCrumbs();
+  const [sidebarCollapsed, toggleSidebar] = useSidebarCollapsed();
 
   // Swap the splash window for this one once the first data has loaded.
   useEffect(() => {
@@ -234,44 +246,13 @@ function Shell() {
   }, [loaded]);
 
   return (
-    <SidebarProvider className="h-screen">
-      <AppSidebar />
-      <SidebarInset className="min-w-0 overflow-hidden">
-        <header className="flex h-12 shrink-0 items-center gap-2 border-b px-4">
-          <SidebarTrigger className="-ml-1" />
-          <Separator orientation="vertical" className="mr-1 data-[orientation=vertical]:h-4" />
-          <Breadcrumb>
-            <BreadcrumbList>
-              {crumbs.map((c, i) => (
-                <Fragment key={i}>
-                  {i > 0 && <BreadcrumbSeparator />}
-                  <BreadcrumbItem>
-                    {c.route ? (
-                      <BreadcrumbLink asChild>
-                        <button type="button" onClick={() => navigate(c.route!)}>
-                          {c.label}
-                        </button>
-                      </BreadcrumbLink>
-                    ) : (
-                      <BreadcrumbPage>{c.label}</BreadcrumbPage>
-                    )}
-                  </BreadcrumbItem>
-                </Fragment>
-              ))}
-            </BreadcrumbList>
-          </Breadcrumb>
-        </header>
-        {error && (
-          <div className="flex items-center justify-between gap-4 border-b border-destructive/30 bg-destructive/10 px-6 py-2 text-sm text-destructive">
-            <span>{error}</span>
-            <Button variant="ghost" size="icon-xs" title="Dismiss" onClick={clearError}>
-              <X />
-            </Button>
-          </div>
-        )}
-        <div className="min-h-0 flex-1 overflow-auto bg-muted/30">{loaded && <Page />}</div>
-      </SidebarInset>
-    </SidebarProvider>
+    <div className="flex h-screen">
+      <AppSidebar collapsed={sidebarCollapsed} />
+      <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
+        <AppHeader crumbs={crumbs} sidebarCollapsed={sidebarCollapsed} onToggleSidebar={toggleSidebar} />
+        <div className="min-h-0 flex-1 overflow-auto bg-muted/30">{loaded ? <Page /> : <PageSkeleton />}</div>
+      </main>
+    </div>
   );
 }
 
@@ -295,6 +276,7 @@ function App() {
           <Shell />
         </RouterProvider>
       </SchoolProvider>
+      <Toaster position="bottom-right" closeButton />
     </TooltipProvider>
   );
 }

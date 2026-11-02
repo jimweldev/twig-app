@@ -1,17 +1,25 @@
 import { useState } from "react";
 import { openUrl } from "@tauri-apps/plugin-opener";
-import { Check, ClipboardPaste, Copy, ExternalLink, Info, Undo2, WandSparkles } from "lucide-react";
+import { Check, ClipboardPaste, Copy, ExternalLink, Info, ListPlus, Undo2, WandSparkles } from "lucide-react";
 import { Field } from "@/components/field";
 import { SimpleSelect } from "@/components/simple-select";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { AI_LABELS, buildPrompt, parseResponse, type AiKey, type LessonPlan, type PromptInput } from "./plan";
+import {
+  AI_LABELS,
+  buildPrompt,
+  parseResponse,
+  type AiKey,
+  type AiValues,
+  type LessonPlan,
+  type PromptInput,
+} from "./plan";
 
-const CHATGPT_URL = "https://chatgpt.com/";
+export const CHATGPT_URL = "https://chatgpt.com/";
 
-function Step({ n, title, children }: { n: number; title: string; children: React.ReactNode }) {
+export function Step({ n, title, children }: { n: number; title: string; children: React.ReactNode }) {
   return (
     <div className="flex gap-3">
       <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">
@@ -35,11 +43,11 @@ export function AiDraftPanel({
   onUndo,
 }: {
   plan: LessonPlan;
-  onApply: (values: Partial<Record<AiKey, string>>) => void;
+  onApply: (values: AiValues) => void;
   /** Present while the last fill can be undone. */
   onUndo?: () => void;
 }) {
-  const [input, setInput] = useState<PromptInput>({ topic: "", notes: "", language: "English" });
+  const [input, setInput] = useState<PromptInput>({ topic: plan.title, notes: "", language: "English" });
   const [copied, setCopied] = useState(false);
   const [reply, setReply] = useState("");
   const [error, setError] = useState("");
@@ -54,6 +62,31 @@ export function AiDraftPanel({
     } catch {
       setError("Couldn't copy. Open “See the prompt” below and copy it by hand.");
     }
+  };
+
+  // A fill-in outline for the notes: each line says what to write after it; blank lines separate the groups.
+  const outline = [
+    ["Competency (the code or exact wording): ", "Standards (content and performance, if you have them): "],
+    ...Array.from({ length: plan.sessions }, (_, i) => [
+      `Session ${i + 1}`,
+      "Topic: ",
+      "Pre-lesson (review, motivation): ",
+      "Activities: ",
+      "Quiz (type and number of items): ",
+    ]),
+    [
+      "Learners (grade and sections, reading level, interests, what they already know): ",
+      "Resources (what you have, e.g. printed charts, TV, textbooks): ",
+      "Also include (integration, homework, references you must use): ",
+    ],
+  ]
+    .map((group) => group.join("\n"))
+    .join("\n\n");
+  // Once the outline is in, the button would only duplicate it (older outlines also start with "Competency (").
+  const hasTemplate = input.notes.includes("Competency (");
+  const insertTemplate = () => {
+    if (hasTemplate) return;
+    setInput({ ...input, notes: input.notes.trim() ? `${input.notes.trimEnd()}\n\n${outline}` : outline });
   };
 
   const openChatGpt = () => openUrl(CHATGPT_URL).catch(() => window.open(CHATGPT_URL, "_blank"));
@@ -104,14 +137,24 @@ export function AiDraftPanel({
               />
             </Field>
           </div>
-          <Field label="Notes for ChatGPT (optional)">
+          <Field
+            label="Notes for ChatGPT"
+            hint="The more you tell ChatGPT, the closer the draft is to what you want. Include the competency or its code, what each session should cover, the activities and assessment you prefer, and what your learners are like."
+          >
             <Textarea
-              rows={2}
-              placeholder="e.g. Use a group activity. Many learners have no gadgets at home."
+              rows={hasTemplate ? 20 : 6}
+              placeholder={
+                "e.g.\nCompetency: Explain how the geologic time scale helps to recount the history of the Earth.\n\nSession 1\nTopic: why scientists need a geologic time scale\nPre-lesson: review relative and absolute dating; compare a clock and a calendar\nActivities: read a time scale diagram in pairs\nQuiz: 5-item True/False\n\nLearners: 9 STE and Barium; mixed reading levels; enjoy matching games and timelines."
+              }
               value={input.notes}
               onChange={(e) => setInput({ ...input, notes: e.target.value })}
             />
           </Field>
+          {!hasTemplate && (
+            <Button variant="outline" size="sm" className="self-start" onClick={insertTemplate}>
+              <ListPlus /> Add notes template ({plan.sessions} session{plan.sessions === 1 ? "" : "s"})
+            </Button>
+          )}
           <div className="flex flex-wrap gap-2">
             <Button onClick={copy}>
               {copied ? <Check /> : <Copy />} {copied ? "Copied" : "Copy prompt"}

@@ -15,17 +15,10 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import { addLearners, deleteLearner, updateLearner, type Learner, type NewLearner, type Sex } from "@/lib/db";
-import { ageOn, displayName, parseLearnerLine } from "@/lib/names";
+import { ageOn, displayName, normalizeDate, parseLearnerLine } from "@/lib/names";
 import { todayIso } from "@/attendance/calendar";
 import { moveFocus } from "@/ecr/TermSheet";
 
@@ -35,62 +28,89 @@ const SEX_OPTIONS = [
   { value: "F", label: "Female" },
 ];
 
-/** An LRN is up to 12 digits; blank is allowed. */
-const cleanLrn = (text: string) => text.replace(/\s/g, "");
-const isLrnText = (text: string) => /^\d{0,12}$/.test(cleanLrn(text));
+/** An LRN is up to 12 digits; blank is allowed. Null when the text isn't one. */
+const parseLrn = (text: string) => {
+  const t = text.replace(/\s/g, "");
+  return /^\d{0,12}$/.test(t) ? t : null;
+};
+
+/** A birthdate typed like Excel shows it (3/9/2014) or as 2014-03-09; blank is allowed. */
+const parseBirthdate = (text: string) => (text.trim() ? normalizeDate(text) || null : "");
+
+/** "2014-03-09" -> "3/9/2014", the way Excel shows dates in the Philippines. */
+const showDate = (iso: string) => {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+  return m ? `${Number(m[2])}/${Number(m[3])}/${m[1]}` : "";
+};
 
 /**
- * The LRN column works like Excel: type straight into it, Enter and the arrow keys
- * move up and down, Esc puts back what was there, and a column of LRNs copied from
- * Excel fills this row and the ones below.
+ * A cell that works like Excel: type straight into it, Enter and the arrow keys move,
+ * Esc puts back what was there, and a column copied from Excel fills this row and the
+ * ones below. `parse` turns typed text into the stored value, or null when it doesn't fit.
  */
-function LrnCell({
+function SheetCell({
   value,
+  shown,
   row,
+  col,
+  label,
+  placeholder,
+  invalidHint,
+  className,
+  parse,
   onCommit,
   onPasteColumn,
 }: {
   value: string;
+  /** How the stored value looks in the cell. */
+  shown: string;
   row: number;
-  onCommit: (lrn: string) => void;
-  onPasteColumn: (lrns: string[]) => void;
+  col: number;
+  label: string;
+  placeholder: string;
+  invalidHint: string;
+  className?: string;
+  parse: (text: string) => string | null;
+  onCommit: (value: string) => void;
+  onPasteColumn: (values: string[]) => void;
 }) {
-  const [text, setText] = useState(value);
-  useEffect(() => setText(value), [value]);
-  const invalid = !isLrnText(text);
+  const [text, setText] = useState(shown);
+  useEffect(() => setText(shown), [shown]);
+  const parsed = parse(text);
+  const invalid = parsed === null;
 
   return (
     <input
-      data-cell={`${row}:0`}
+      data-cell={`${row}:${col}`}
       value={text}
-      inputMode="numeric"
-      placeholder="Type LRN"
-      aria-label="LRN"
+      placeholder={placeholder}
+      aria-label={label}
       aria-invalid={invalid}
-      title={invalid ? "An LRN is up to 12 digits" : undefined}
+      title={invalid ? invalidHint : undefined}
       className={cn(
-        "h-8 w-36 rounded-sm bg-transparent px-2 font-mono text-xs outline-none placeholder:font-sans placeholder:text-muted-foreground/40 hover:bg-muted/60 focus:bg-background focus:ring-2 focus:ring-primary",
+        "h-8 rounded-sm bg-transparent px-2 text-xs outline-none placeholder:font-sans placeholder:text-muted-foreground/40 hover:bg-muted/60 focus:bg-background focus:ring-2 focus:ring-primary",
         invalid && "bg-red-50 text-destructive",
+        className,
       )}
       onChange={(e) => setText(e.target.value)}
       onFocus={(e) => e.currentTarget.select()}
       onBlur={() => {
-        if (cleanLrn(text) !== value && !invalid) onCommit(cleanLrn(text));
+        if (parsed !== null && parsed !== value) onCommit(parsed);
       }}
       onKeyDown={(e) => {
         if (e.key === "Escape") {
-          setText(value);
+          setText(shown);
           e.currentTarget.blur();
           return;
         }
-        moveFocus(e, row, 0);
+        moveFocus(e, row, col);
       }}
       onPaste={(e) => {
         const lines = e.clipboardData.getData("text/plain").replace(/\r\n?/g, "\n").replace(/\n$/, "").split("\n");
         if (lines.length < 2) return;
         e.preventDefault();
-        // Only the first cell of each copied row is an LRN.
-        onPasteColumn(lines.map((line) => cleanLrn(line.split("\t")[0])));
+        // Only the first cell of each copied row belongs to this column.
+        onPasteColumn(lines.map((line) => line.split("\t")[0]));
       }}
     />
   );
@@ -100,10 +120,10 @@ function LrnCell({
 function LearnerFields<T extends NewLearner>({ value, onChange }: { value: T; onChange: (v: T) => void }) {
   return (
     <div className="grid grid-cols-2 gap-3">
-      <Field label="Last name" className="col-span-2">
+      <Field label="Last name" required className="col-span-2">
         <Input value={value.last_name} onChange={(e) => onChange({ ...value, last_name: e.target.value })} />
       </Field>
-      <Field label="First name">
+      <Field label="First name" required>
         <Input value={value.first_name} onChange={(e) => onChange({ ...value, first_name: e.target.value })} />
       </Field>
       <Field label="Middle name">
@@ -113,10 +133,18 @@ function LearnerFields<T extends NewLearner>({ value, onChange }: { value: T; on
         <Input value={value.lrn} maxLength={12} onChange={(e) => onChange({ ...value, lrn: e.target.value })} />
       </Field>
       <Field label="Sex">
-        <SimpleSelect value={value.sex} onValueChange={(v) => onChange({ ...value, sex: v as Sex })} options={SEX_OPTIONS} />
+        <SimpleSelect
+          value={value.sex}
+          onValueChange={(v) => onChange({ ...value, sex: v as Sex })}
+          options={SEX_OPTIONS}
+        />
       </Field>
       <Field label="Birthdate" className="col-span-2" hint="Prints the learner's age on the report card.">
-        <Input type="date" value={value.birthdate ?? ""} onChange={(e) => onChange({ ...value, birthdate: e.target.value })} />
+        <Input
+          type="date"
+          value={value.birthdate ?? ""}
+          onChange={(e) => onChange({ ...value, birthdate: e.target.value })}
+        />
       </Field>
     </div>
   );
@@ -163,11 +191,14 @@ export function SectionLearners({
   // Rows in the order shown, so arrow keys and pasted columns run through both groups.
   const shown = groups.flatMap(([sex]) => learners.filter((l) => l.sex === sex));
 
-  const pasteLrns = (from: number, lrns: string[]) =>
+  // A column pasted from Excel: each line updates the next learner shown; lines that don't fit are skipped.
+  const pasteColumn = (from: number, key: "lrn" | "birthdate", texts: string[]) =>
     run(async () => {
-      for (const [i, lrn] of lrns.entries()) {
+      const parse = key === "lrn" ? parseLrn : parseBirthdate;
+      for (const [i, text] of texts.entries()) {
         const l = shown[from + i];
-        if (l && isLrnText(lrn) && lrn !== l.lrn) await updateLearner({ ...l, lrn });
+        const value = parse(text);
+        if (l && value !== null && value !== l[key]) await updateLearner({ ...l, [key]: value });
       }
     });
 
@@ -199,6 +230,7 @@ export function SectionLearners({
               <TableHead className="w-10 pl-4">#</TableHead>
               <TableHead>Learner</TableHead>
               <TableHead>LRN</TableHead>
+              <TableHead>Birthdate</TableHead>
               <TableHead>Age</TableHead>
               <TableHead />
             </TableRow>
@@ -209,7 +241,10 @@ export function SectionLearners({
               return (
                 <Fragment key={sex}>
                   <TableRow className="bg-muted/50 hover:bg-muted/50">
-                    <TableCell colSpan={5} className="pl-4 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+                    <TableCell
+                      colSpan={6}
+                      className="pl-4 text-xs font-semibold tracking-wide text-muted-foreground uppercase"
+                    >
                       {label} ({rows.length})
                     </TableCell>
                   </TableRow>
@@ -218,14 +253,36 @@ export function SectionLearners({
                       <TableCell className="pl-4 text-muted-foreground">{i + 1}</TableCell>
                       <TableCell className="font-medium">{displayName(l)}</TableCell>
                       <TableCell className="py-0">
-                        <LrnCell
+                        <SheetCell
                           value={l.lrn}
+                          shown={l.lrn}
                           row={shown.indexOf(l)}
+                          col={0}
+                          label="LRN"
+                          placeholder="Type LRN"
+                          invalidHint="An LRN is up to 12 digits"
+                          className="w-36 font-mono"
+                          parse={parseLrn}
                           onCommit={(lrn) => run(() => updateLearner({ ...l, lrn }))}
-                          onPasteColumn={(lrns) => pasteLrns(shown.indexOf(l), lrns)}
+                          onPasteColumn={(texts) => pasteColumn(shown.indexOf(l), "lrn", texts)}
                         />
                       </TableCell>
-                      <TableCell className="text-muted-foreground tabular-nums" title={l.birthdate || "No birthdate"}>
+                      <TableCell className="py-0">
+                        <SheetCell
+                          value={l.birthdate}
+                          shown={showDate(l.birthdate)}
+                          row={shown.indexOf(l)}
+                          col={1}
+                          label="Birthdate"
+                          placeholder="m/d/yyyy"
+                          invalidHint="Type a date like 3/9/2014"
+                          className="w-28 tabular-nums"
+                          parse={parseBirthdate}
+                          onCommit={(birthdate) => run(() => updateLearner({ ...l, birthdate }))}
+                          onPasteColumn={(texts) => pasteColumn(shown.indexOf(l), "birthdate", texts)}
+                        />
+                      </TableCell>
+                      <TableCell className="text-muted-foreground tabular-nums">
                         {ageOn(l.birthdate, todayIso()) ?? "—"}
                       </TableCell>
                       <TableCell className="pr-4 text-right opacity-0 group-hover:opacity-100 focus-within:opacity-100">
@@ -284,11 +341,7 @@ export function SectionLearners({
             <Button variant="outline" onClick={() => setAdding(false)}>
               Close
             </Button>
-            <Button
-              type="submit"
-              form="add-learner-form"
-              disabled={!form.last_name.trim() || !form.first_name.trim()}
-            >
+            <Button type="submit" form="add-learner-form" disabled={!form.last_name.trim() || !form.first_name.trim()}>
               <UserPlus /> Add learner
             </Button>
           </DialogFooter>

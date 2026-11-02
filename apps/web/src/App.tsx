@@ -41,6 +41,14 @@ function DownloadButton({ large = false }: { large?: boolean }) {
             <>
               Version {release.version}
               {release.installer && ` · ${formatSize(release.installer.size)}`} · Windows 10 and 11 ·{" "}
+              {release.mac && (
+                <>
+                  <a href={release.mac.url} className="underline hover:text-stone-800">
+                    Mac version
+                  </a>{" "}
+                  ·{" "}
+                </>
+              )}
               <a href={RELEASES_URL} className="underline hover:text-stone-800">
                 all releases
               </a>
@@ -150,19 +158,30 @@ const FAQ: [string, ReactNode][] = [
     "Is TWIG an official DepEd app?",
     "No. TWIG is an independent, free and open-source (MIT) tool made by a teacher-developer. It follows published DepEd orders (DO 015, s. 2026 for grading), but always check computations against the official issuances and your school's forms.",
   ],
-  ["Do I need internet?", "Only to download it. TWIG runs fully offline after that, including sharing grades between teachers."],
+  [
+    "Do I need internet?",
+    "Only to download it. TWIG runs fully offline after that, including sharing grades between teachers.",
+  ],
   [
     "Where is my data saved?",
     <>
-      In a database file on your computer: <code className="rounded bg-stone-100 px-1 py-0.5 text-[0.85em]">%APPDATA%\com.twig.desktop\twig.db</code>.
-      Copy that file to a USB drive now and then as a backup.
+      In a database file on your computer:{" "}
+      <code className="rounded bg-stone-100 px-1 py-0.5 text-[0.85em]">%APPDATA%\com.twig.desktop\twig.db</code> on
+      Windows, or{" "}
+      <code className="rounded bg-stone-100 px-1 py-0.5 text-[0.85em]">
+        ~/Library/Application Support/com.twig.desktop/twig.db
+      </code>{" "}
+      on a Mac. Copy that file to a USB drive now and then as a backup.
     </>,
   ],
   [
     "Windows says it protected my PC. Is it safe?",
     "Until code signing is in place (TWIG has applied for free signing through the SignPath Foundation), Windows SmartScreen shows a warning the first time. Click “More info”, then “Run anyway”. The full source code is public on GitHub.",
   ],
-  ["Is there a Mac or Linux version?", "Not yet — TWIG is Windows-only for now."],
+  [
+    "Is there a Mac version?",
+    "Yes, for Apple silicon and Intel Macs (macOS 11 or later): use the Mac version link under the download button. The first time, macOS may say it can’t check the app for malware: open System Settings › Privacy & Security and click “Open Anyway”. There is no Linux version yet.",
+  ],
 ];
 
 export default function App() {
@@ -211,9 +230,9 @@ export default function App() {
                 <span className="text-emerald-700">done in one place.</span>
               </h1>
               <p className="mt-5 max-w-xl text-lg leading-relaxed text-stone-600">
-                <strong className="font-semibold text-stone-800">TWIG</strong> — Teacher&rsquo;s Work Integration Gateway — is a
-                desktop app for Filipino teachers: e-class records, attendance and report cards, built around the
-                three-term school year. No internet needed.
+                <strong className="font-semibold text-stone-800">TWIG</strong> — Teacher&rsquo;s Work Integration
+                Gateway — is a desktop app for Filipino teachers: e-class records, attendance and report cards, built
+                around the three-term school year. No internet needed.
               </p>
               <div className="mt-8">
                 <DownloadButton large />
@@ -250,9 +269,15 @@ export default function App() {
           </p>
           <ol className="mt-10 grid gap-5 md:grid-cols-3">
             {[
-              ["Subject teacher", "Opens the class record and clicks Send grades. TWIG saves a .twig file — add a password if you like."],
+              [
+                "Subject teacher",
+                "Opens the class record and clicks Send grades. TWIG saves a .twig file — add a password if you like.",
+              ],
               ["Any way you like", "Send the file through Messenger, email, a shared folder or a USB drive."],
-              ["Adviser", "Imports the file in the advisory section. Learners are matched by LRN, and the consolidated grades are ready for report cards."],
+              [
+                "Adviser",
+                "Imports the file in the advisory section. Learners are matched by LRN, and the consolidated grades are ready for report cards.",
+              ],
             ].map(([title, text], i) => (
               <li key={title} className="rounded-2xl border border-stone-200 p-6">
                 <span className="flex size-8 items-center justify-center rounded-full bg-emerald-700 text-sm font-bold text-white">

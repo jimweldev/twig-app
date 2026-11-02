@@ -15,14 +15,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
   createSchoolYear,
   deleteSchoolYear,
@@ -69,20 +62,17 @@ export function SchoolYearsPage({
   const save = async () => {
     if (!editing) return;
     const form = { ...editing.form, name: editing.form.name.trim() };
-    const ok = await run(() =>
-      editing.id === null ? createSchoolYear(form) : updateSchoolYear(editing.id, form),
-    );
+    const ok = await run(() => (editing.id === null ? createSchoolYear(form) : updateSchoolYear(editing.id, form)));
     if (ok) setEditing(null);
   };
 
   const form = editing?.form;
-  const duplicate =
-    !!form && schoolYears.some((y) => y.name === form.name.trim() && y.id !== editing?.id);
+  const duplicate = !!form && schoolYears.some((y) => y.name === form.name.trim() && y.id !== editing?.id);
   const datesValid = !form?.start_date || !form?.end_date || form.start_date < form.end_date;
   const valid = !!form && isValidSchoolYear(form.name) && !duplicate && datesValid;
 
   return (
-    <div className="mx-auto max-w-4xl p-8">
+    <div className="page">
       <PageHeader
         title="School years"
         description="Only one school year is active at a time. Sections, learners and class records across TWIG show the active year; switch it here to open a past year."
@@ -183,6 +173,7 @@ export function SchoolYearsPage({
             >
               <Field
                 label="School year"
+                required
                 className="col-span-2"
                 hint={
                   duplicate

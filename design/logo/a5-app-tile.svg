@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <!-- A5: app-icon tile, the Branching T cut out of a rounded square. Draft uses a mask; final would be one path. -->
+  <mask id="cut">
+    <rect width="256" height="256" fill="#fff"/>
+    <g transform="translate(38.4 38.4) scale(0.7)" fill="#000">
+      <rect x="112" y="76" width="32" height="152" rx="16"/>
+      <rect x="36" y="76" width="108" height="32" rx="16"/>
+      <path d="M132 100 A72 72 0 0 1 220 28 A72 72 0 0 1 132 100 Z"/>
+    </g>
+  </mask>
+  <rect width="256" height="256" rx="58" mask="url(#cut)"/>
+</svg>

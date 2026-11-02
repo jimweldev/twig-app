@@ -16,6 +16,10 @@ Only installers built by the release workflow from a tagged commit of this
 repository: the NSIS setup `.exe` and the `.msi`. Nothing built on a personal
 computer is signed.
 
+The Mac app (`.dmg`) is not part of SignPath signing. It is built by the same
+workflow and ad-hoc signed only, so macOS asks to confirm it the first time it
+opens. Its updates are still verified with the TWIG updater key below.
+
 ## Team roles
 
 | Role | People |

@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <!-- T5: app-icon tile, the lowercase t cut out of a rounded square. Draft uses a mask; final would be one path. -->
+  <mask id="cut">
+    <rect width="256" height="256" fill="#fff"/>
+    <g transform="translate(38.4 38.4) scale(0.7)">
+      <path d="M116 44 V180 Q116 216 152 216 H168" fill="none" stroke="#000" stroke-width="32" stroke-linecap="round"/>
+      <rect x="56" y="88" width="76" height="32" rx="16"/>
+      <path d="M124 112 A70 70 0 0 1 212 48 A70 70 0 0 1 124 112 Z"/>
+    </g>
+  </mask>
+  <rect width="256" height="256" rx="58" mask="url(#cut)"/>
+</svg>

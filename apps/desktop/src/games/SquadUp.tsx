@@ -7,17 +7,40 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, typ
 import { move } from "@dnd-kit/helpers";
 import { DragDropProvider, useDroppable } from "@dnd-kit/react";
 import { useSortable } from "@dnd-kit/react/sortable";
-import { Crown, Dices, GripVertical, Maximize, Minimize, Minus, Play, Plus, RotateCcw, Users } from "lucide-react";
+import {
+  Check,
+  Crown,
+  Dices,
+  FastForward,
+  GripVertical,
+  Maximize,
+  Minimize,
+  Minus,
+  Play,
+  Plus,
+  RotateCcw,
+  Save,
+  Users,
+} from "lucide-react";
 import { cn } from "cn";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
-import type { Learner } from "@/lib/db";
+import { saveGroups, updateSavedGroups, type Learner, type SavedGrouping } from "@/lib/db";
 import "./games.css";
+import { toast } from "sonner";
 
 // A distinct accent per group so groups are easy to tell apart.
-const GROUP_ACCENTS = [
+export const GROUP_ACCENTS = [
   { dot: "bg-rose-500", border: "border-t-rose-400" },
   { dot: "bg-amber-500", border: "border-t-amber-400" },
   { dot: "bg-emerald-500", border: "border-t-emerald-400" },
@@ -36,7 +59,8 @@ const UNASSIGNED = "unassigned";
 const ROW_H = 34;
 const MIN_BODY_H = 44;
 
-type Phase = "idle" | "grouped";
+/** idle: picking leaders; dealing: learners fly from the deck into groups one by one. */
+type Phase = "idle" | "dealing" | "grouped";
 /** group key -> ordered learner ids */
 type Lists = Record<string, number[]>;
 
@@ -63,6 +87,22 @@ export function makeGroups(learners: Learner[], count: number, leaderIds: Set<nu
   others.forEach((l, i) => lists[String((leaders.length + i) % count)].push(l.id));
   return lists;
 }
+
+/**
+ * The order cards are dealt in: round by round, groups taking turns in a random order,
+ * so each group fills up a learner at a time like a hand of cards.
+ */
+export function dealOrder(lists: Lists): { id: number; key: string }[] {
+  const keys = shuffle(Object.keys(lists));
+  const rounds = Math.max(0, ...keys.map((k) => lists[k].length));
+  const order: { id: number; key: string }[] = [];
+  for (let r = 0; r < rounds; r++)
+    for (const key of keys) if (r < lists[key].length) order.push({ id: lists[key][r], key });
+  return order;
+}
+
+/** Time between two cards: quick for big classes, so a deal takes a few seconds at most. */
+const dealGap = (count: number) => Math.min(320, Math.max(80, 5000 / Math.max(1, count)));
 
 /**
  * Drag mode always shows the Unassigned card, so the lists need that bucket for
@@ -131,7 +171,13 @@ function MemberRow({ animate, entranceDelay, ...body }: RowProps) {
 }
 
 /** A draggable member row (drag on): grip drags, body toggles leader. */
-function SortableMember({ index, groupKey, animate, entranceDelay, ...body }: RowProps & { index: number; groupKey: string }) {
+function SortableMember({
+  index,
+  groupKey,
+  animate,
+  entranceDelay,
+  ...body
+}: RowProps & { index: number; groupKey: string }) {
   const { ref, handleRef, isDragging } = useSortable({
     id: body.learner.id,
     index,
@@ -172,9 +218,21 @@ type ColumnShellProps = {
 };
 
 /** A group card: header, members, and an empty-state hint. */
-function ColumnShell({ accent, label, count, hasLeader, bodyRef, isDropTarget, dropHint, reservedHeight, children }: ColumnShellProps) {
+function ColumnShell({
+  accent,
+  label,
+  count,
+  hasLeader,
+  bodyRef,
+  isDropTarget,
+  dropHint,
+  reservedHeight,
+  children,
+}: ColumnShellProps) {
   return (
-    <Card className={cn(accent.border, "gap-0 border-t-4 py-4 transition-shadow", isDropTarget && "ring-2 ring-primary")}>
+    <Card
+      className={cn(accent.border, "gap-0 border-t-4 py-4 transition-shadow", isDropTarget && "ring-2 ring-primary")}
+    >
       <CardContent>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -190,13 +248,20 @@ function ColumnShell({ accent, label, count, hasLeader, bodyRef, isDropTarget, d
           {children}
         </div>
         {/* Toggled with CSS, never mounted/unmounted next to the sortable rows — that would crash dnd-kit. */}
-        {dropHint && <p className={cn("py-2 text-center text-xs text-muted-foreground", count !== 0 && "hidden")}>Drop learners here</p>}
+        {dropHint && (
+          <p className={cn("py-2 text-center text-xs text-muted-foreground", count !== 0 && "hidden")}>
+            Drop learners here
+          </p>
+        )}
       </CardContent>
     </Card>
   );
 }
 
-function DroppableColumn({ id, ...shell }: Omit<ColumnShellProps, "bodyRef" | "isDropTarget" | "dropHint"> & { id: string }) {
+function DroppableColumn({
+  id,
+  ...shell
+}: Omit<ColumnShellProps, "bodyRef" | "isDropTarget" | "dropHint"> & { id: string }) {
   const { ref, isDropTarget } = useDroppable({ id, type: "column", accept: "learner" });
   return <ColumnShell {...shell} bodyRef={ref} isDropTarget={isDropTarget} dropHint />;
 }
@@ -243,7 +308,9 @@ function UnassignedDropCard({
             />
           ))}
         </div>
-        <p className={cn("py-2 text-center text-xs text-muted-foreground", members.length !== 0 && "hidden")}>Drop learners here</p>
+        <p className={cn("py-2 text-center text-xs text-muted-foreground", members.length !== 0 && "hidden")}>
+          Drop learners here
+        </p>
       </CardContent>
     </Card>
   );
@@ -262,12 +329,40 @@ export interface SquadMemory {
 
 const keyOf = (learners: Learner[]) => learners.map((l) => l.id).join(",");
 
+/**
+ * A saved set of groups as Squad Up's starting state, with drag on so it can be reworked.
+ * Learners added to the section since wait in Unassigned; removed ones are dropped.
+ */
+export function memoryFromSaved(saved: SavedGrouping, learners: Learner[]): SquadMemory {
+  const present = new Set(learners.map((l) => l.id));
+  const lists: Lists = {};
+  saved.groups.forEach((g, i) => (lists[String(i)] = g.learnerIds.filter((id) => present.has(id))));
+  const placed = new Set(Object.values(lists).flat());
+  lists[UNASSIGNED] = learners.filter((l) => !placed.has(l.id)).map((l) => l.id);
+  return {
+    learnerKey: keyOf(learners),
+    numGroups: Math.max(1, saved.groups.length),
+    lists,
+    grouped: true,
+    leaderIds: saved.groups.flatMap((g) => (g.leaderId !== null && present.has(g.leaderId) ? [g.leaderId] : [])),
+    dragEnabled: true,
+  };
+}
+
 export function SquadUp({
   learners,
+  sectionId,
+  regrouping,
   memory,
   onMemoryChange,
+  onError,
 }: {
   learners: Learner[];
+  /** The section the learners belong to; groups can be saved to it when given. */
+  sectionId?: number;
+  /** A saved set being regrouped: saving can update it instead of adding a new one. */
+  regrouping?: SavedGrouping;
+  onError?: (e: unknown) => void;
   /** Saved state from an earlier opening (e.g. the class record's drawer). */
   memory?: SquadMemory | null;
   onMemoryChange?: (memory: SquadMemory) => void;
@@ -280,24 +375,28 @@ export function SquadUp({
   );
   const [lists, setLists] = useState<Lists | null>(remembered?.lists ?? null);
   const [phase, setPhase] = useState<Phase>(remembered?.grouped && remembered.lists ? "grouped" : "idle");
-  const [isShuffling, setIsShuffling] = useState(false);
+  // The learners still waiting in the deck while dealing, in deal order.
+  const [deck, setDeck] = useState<number[]>([]);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [leaders, setLeaders] = useState<Set<number>>(() => new Set(remembered?.leaderIds ?? []));
   // Drag & drop is opt-in so the shuffle animation stays clean.
   const [dragEnabled, setDragEnabled] = useState(remembered?.dragEnabled ?? false);
-  // Briefly true after a shuffle so members animate into their group.
-  const [animateEntrance, setAnimateEntrance] = useState(false);
 
   const containerRef = useRef<HTMLDivElement>(null);
-  const shuffleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const entranceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const dealTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Saving the groups: the name being typed, and the groups as last saved (to show "Saved").
+  const [saveName, setSaveName] = useState<string | null>(null);
+  // Starts as the regrouped set, so it reads "Saved" until something changes.
+  const [savedLists, setSavedLists] = useState<string | null>(() =>
+    regrouping ? JSON.stringify(regrouping.groups) : null,
+  );
+  // The saved set an update writes to: the one being regrouped, until saved as new.
+  const [updating, setUpdating] = useState(regrouping ?? null);
+  // The finished groups while dealing, to jump to on Skip.
+  const dealTarget = useRef<Lists | null>(null);
+  const flyFrom = useRef<{ id: number; x: number; y: number } | null>(null);
   // Lists at drag start, to revert a canceled drag.
   const dragSnapshot = useRef<Lists | null>(null);
-  // FLIP travel: each learner's position in the roster card just before the
-  // shuffle, so the layout effect can fly them up into their group once.
-  const flipFirst = useRef<Map<number, { x: number; y: number }>>(new Map());
-  const flipPending = useRef(false);
-
   const learnerById = useMemo(() => new Map(learners.map((l) => [l.id, l])), [learners]);
   const isGrouped = phase === "grouped" && lists !== null;
   const groupKeys = useMemo(() => Array.from({ length: numGroups }, (_, i) => String(i)), [numGroups]);
@@ -306,9 +405,13 @@ export function SquadUp({
   // A balanced deal puts at most ceil(learners / groups) in a group; reserving
   // that many rows keeps every card the same height.
   const reservedHeight = Math.max(MIN_BODY_H, Math.ceil(learners.length / numGroups) * ROW_H);
-  const toLearners = (ids: number[] = []) => ids.map((id) => learnerById.get(id)).filter((l): l is Learner => l !== undefined);
+  const toLearners = (ids: number[] = []) =>
+    ids.map((id) => learnerById.get(id)).filter((l): l is Learner => l !== undefined);
   const unassignedMembers = toLearners(lists?.[UNASSIGNED]);
-  const bottomMembers = isGrouped ? unassignedMembers : learners;
+  // The list at the bottom: everyone before a deal, those still waiting while dealing, leftovers after.
+  // While dealing everyone keeps their place, so learners already dealt leave a blank spot.
+  const bottomMembers = phase === "dealing" ? learners : isGrouped ? unassignedMembers : learners;
+  const waiting = new Set(deck);
 
   // A changed class list starts over; the first render keeps what was restored from memory.
   const learnerKeyRef = useRef(learnerKey);
@@ -335,58 +438,54 @@ export function SquadUp({
 
   useEffect(
     () => () => {
-      if (shuffleTimer.current) clearTimeout(shuffleTimer.current);
-      if (entranceTimer.current) clearTimeout(entranceTimer.current);
+      if (dealTimer.current) clearTimeout(dealTimer.current);
     },
     [],
   );
 
-  const triggerEntrance = useCallback(() => {
-    setAnimateEntrance(true);
-    if (entranceTimer.current) clearTimeout(entranceTimer.current);
-    entranceTimer.current = setTimeout(() => setAnimateEntrance(false), 1400);
-  }, []);
-
-  const captureRosterPositions = useCallback(() => {
-    const map = flipFirst.current;
-    map.clear();
-    containerRef.current?.querySelectorAll<HTMLElement>("[data-roster-id]").forEach((el) => {
-      const r = el.getBoundingClientRect();
-      map.set(Number(el.dataset.rosterId), { x: r.left, y: r.top });
-    });
-  }, []);
-
-  // FLIP: after the roster becomes group cards, fly each member from its old
-  // roster spot into its new group. Once per shuffle, drag-off layout only.
+  // Each dealt learner flies as a card from the deck to their new row. The card is a copy
+  // laid over everything, so the scrolling group area can't clip it mid-flight; the real
+  // row shows once it lands.
   useLayoutEffect(() => {
-    if (!flipPending.current) return;
-    flipPending.current = false;
-    const first = flipFirst.current;
-    if (!containerRef.current || first.size === 0) return;
-    containerRef.current.querySelectorAll<HTMLElement>("[data-member-id]").forEach((el) => {
-      const from = first.get(Number(el.dataset.memberId));
-      if (!from) return;
-      const rect = el.getBoundingClientRect();
-      const dx = from.x - rect.left;
-      const dy = from.y - rect.top;
-      if (Math.abs(dx) < 1 && Math.abs(dy) < 1) return;
-      const delay = Number(el.dataset.delay) || 0;
-      el.style.transition = "none";
-      el.style.transform = `translate(${dx}px, ${dy}px)`;
-      void el.offsetWidth; // commit the start frame before animating home
-      const onEnd = () => {
-        el.style.transition = "";
-        el.style.transform = "";
-        el.removeEventListener("transitionend", onEnd);
-      };
-      el.addEventListener("transitionend", onEnd);
-      requestAnimationFrame(() => {
-        el.style.transition = `transform 0.65s cubic-bezier(0.22, 1, 0.36, 1) ${delay}ms`;
-        el.style.transform = "translate(0, 0)";
-      });
+    const from = flyFrom.current;
+    const container = containerRef.current;
+    if (!from || !container) return;
+    flyFrom.current = null;
+    const row = container.querySelector<HTMLElement>(`[data-member-id="${from.id}"]`);
+    if (!row) return;
+    const to = row.getBoundingClientRect();
+    const card = row.cloneNode(true) as HTMLElement;
+    card.removeAttribute("data-member-id");
+    Object.assign(card.style, {
+      position: "fixed",
+      left: `${to.left}px`,
+      top: `${to.top}px`,
+      width: `${to.width}px`,
+      height: `${to.height}px`,
+      margin: "0",
+      zIndex: "70",
+      pointerEvents: "none",
+      borderRadius: "0.5rem",
+      boxShadow: "0 8px 20px rgb(0 0 0 / 0.18)",
     });
-    first.clear();
-  }, [lists, phase]);
+    // In full screen only the game is shown, so the card has to live inside it.
+    (document.fullscreenElement === container ? container : document.body).appendChild(card);
+    row.style.opacity = "0";
+    const land = () => {
+      card.remove();
+      row.style.opacity = "";
+    };
+    const flight = card.animate(
+      [
+        { transform: `translate(${from.x - to.left}px, ${from.y - to.top}px) rotate(-8deg) scale(1.05)` },
+        { transform: "translate(0, 0) rotate(0) scale(1)" },
+      ],
+      { duration: 420, easing: "cubic-bezier(0.22, 1, 0.36, 1)" },
+    );
+    flight.onfinish = land;
+    // Never leave a row hidden if the animation doesn't finish (e.g. the window is minimized).
+    setTimeout(land, 900);
+  }, [lists]);
 
   useEffect(() => {
     const onChange = () => setIsFullscreen(document.fullscreenElement === containerRef.current);
@@ -399,37 +498,95 @@ export function SquadUp({
     else containerRef.current?.requestFullscreen();
   }, []);
 
-  /** Go: shuffle everyone into balanced groups. */
-  const go = useCallback(() => {
-    if (learners.length === 0 || isShuffling) return;
-    setIsShuffling(true);
-    if (shuffleTimer.current) clearTimeout(shuffleTimer.current);
-    shuffleTimer.current = setTimeout(() => {
-      // Drag mode has no static rows to measure, so it uses the rise entrance instead of FLIP.
-      if (dragEnabled) triggerEntrance();
-      else {
-        captureRosterPositions();
-        flipPending.current = true;
-      }
-      setLists(syncUnassignedBucket(makeGroups(learners, clampGroups(numGroups), leaders), dragEnabled));
+  const finishDeal = useCallback(
+    (target: Lists) => {
+      if (dealTimer.current) clearTimeout(dealTimer.current);
+      dealTimer.current = null;
+      dealTarget.current = null;
+      flyFrom.current = null;
+      setDeck([]);
+      setLists(syncUnassignedBucket(target, dragEnabled));
       setPhase("grouped");
-      setIsShuffling(false);
-    }, 600);
-  }, [learners, isShuffling, numGroups, clampGroups, leaders, dragEnabled, triggerEntrance, captureRosterPositions]);
+    },
+    [dragEnabled],
+  );
+
+  /** Go: shuffle into balanced groups, then deal learners from the deck one at a time. */
+  const go = useCallback(() => {
+    if (learners.length === 0 || phase !== "idle") return;
+    const target = makeGroups(learners, clampGroups(numGroups), leaders);
+    const order = dealOrder(target);
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      finishDeal(target);
+      return;
+    }
+    dealTarget.current = target;
+    setLists(Object.fromEntries(Object.keys(target).map((k) => [k, []])));
+    setDeck(order.map((o) => o.id));
+    setPhase("dealing");
+    const gap = dealGap(order.length);
+    const dealNext = (i: number) => {
+      if (i >= order.length) {
+        dealTimer.current = setTimeout(() => finishDeal(target), 450);
+        return;
+      }
+      const { id, key } = order[i];
+      // Each learner leaves from their own spot in the list at the bottom.
+      const spot = containerRef.current?.querySelector(`[data-roster-id="${id}"]`)?.getBoundingClientRect();
+      if (spot) flyFrom.current = { id, x: spot.left, y: spot.top };
+      setDeck((d) => d.slice(1));
+      setLists((prev) => (prev ? { ...prev, [key]: [...(prev[key] ?? []), id] } : prev));
+      dealTimer.current = setTimeout(() => dealNext(i + 1), gap);
+    };
+    // A beat for the empty groups and the deck to appear before the first card flies.
+    dealTimer.current = setTimeout(() => dealNext(0), 350);
+  }, [learners, phase, numGroups, clampGroups, leaders, finishDeal]);
+
+  const skipDeal = useCallback(() => {
+    if (dealTarget.current) finishDeal(dealTarget.current);
+  }, [finishDeal]);
+
+  const groupsToSave = () =>
+    groupKeys.map((k) => {
+      const ids = lists?.[k] ?? [];
+      return { learnerIds: ids, leaderId: ids.find((id) => leaders.has(id)) ?? null };
+    });
+  const savedNow = savedLists !== null && savedLists === JSON.stringify(groupsToSave());
+
+  const save = async (asNew: boolean) => {
+    if (sectionId === undefined || saveName === null || !saveName.trim()) return;
+    try {
+      const groups = groupsToSave();
+      if (updating && !asNew) {
+        await updateSavedGroups(updating.id, saveName, groups);
+        setUpdating({ ...updating, name: saveName.trim(), groups });
+      } else {
+        const id = await saveGroups(sectionId, saveName, groups);
+        setUpdating({ id, section_id: sectionId, name: saveName.trim(), groups, created_at: "" });
+      }
+      setSavedLists(JSON.stringify(groups));
+      setSaveName(null);
+      toast.success(updating && !asNew ? "Groups updated" : "Groups saved", {
+        description: "Find them in the section's Groups tab.",
+      });
+    } catch (e) {
+      onError?.(e);
+    }
+  };
 
   const reset = useCallback(() => {
-    if (shuffleTimer.current) clearTimeout(shuffleTimer.current);
-    shuffleTimer.current = null;
-    setIsShuffling(false);
+    if (dealTimer.current) clearTimeout(dealTimer.current);
+    dealTimer.current = null;
+    dealTarget.current = null;
+    flyFrom.current = null;
+    setDeck([]);
     setLists(null);
     setPhase("idle");
-    flipPending.current = false;
-    flipFirst.current.clear();
   }, []);
 
   const toggleLeader = useCallback(
     (id: number) => {
-      if (isShuffling) return;
+      if (phase === "dealing") return;
       setLeaders((prev) => {
         const next = new Set(prev);
         if (next.has(id)) next.delete(id);
@@ -437,7 +594,7 @@ export function SquadUp({
         return next;
       });
     },
-    [isShuffling],
+    [phase],
   );
 
   /** Crowns one random member in every group that has no leader yet, and moves them to the top. */
@@ -465,16 +622,14 @@ export function SquadUp({
     ? groupKeys.filter((k) => (lists[k] ?? []).length > 0 && !(lists[k] ?? []).some((id) => leaders.has(id))).length
     : 0;
 
-  const hint = isShuffling
-    ? "Shuffling…"
+  const dealing = phase === "dealing";
+  const hint = dealing
+    ? `Dealing… ${deck.length} left`
     : isGrouped
       ? `${numGroups} groups ready${dragEnabled ? " — drag learners between groups." : "."}`
       : learners.length === 0
         ? "Add learners to this section to play."
         : "Choose the number of groups, then press Go.";
-
-  // Staggered landing so members arrive one after another.
-  const entranceDelay = (groupIndex: number, memberIndex: number) => groupIndex * 60 + memberIndex * 45;
 
   // Group cards: draggable only while Drag & drop is on, so the default path
   // has no dnd-kit DOM handling to clash with the shuffle animation.
@@ -482,7 +637,7 @@ export function SquadUp({
     const accent = GROUP_ACCENTS[gi % GROUP_ACCENTS.length];
     const members = toLearners(lists?.[key]);
     const rows = members.map((learner, idx) =>
-      dragEnabled ? (
+      dragEnabled && isGrouped ? (
         <SortableMember
           key={learner.id}
           learner={learner}
@@ -491,8 +646,8 @@ export function SquadUp({
           isLeader={leaders.has(learner.id)}
           accentDot={accent.dot}
           onToggleLeader={toggleLeader}
-          animate={animateEntrance}
-          entranceDelay={entranceDelay(gi, idx)}
+          animate={false}
+          entranceDelay={0}
         />
       ) : (
         <MemberRow
@@ -501,8 +656,8 @@ export function SquadUp({
           isLeader={leaders.has(learner.id)}
           accentDot={accent.dot}
           onToggleLeader={toggleLeader}
-          animate={animateEntrance}
-          entranceDelay={entranceDelay(gi, idx)}
+          animate={false}
+          entranceDelay={0}
         />
       ),
     );
@@ -513,7 +668,7 @@ export function SquadUp({
       hasLeader: members.some((l) => leaders.has(l.id)),
       reservedHeight,
     };
-    return dragEnabled ? (
+    return dragEnabled && isGrouped ? (
       <DroppableColumn key={key} id={key} {...shell}>
         {rows}
       </DroppableColumn>
@@ -527,7 +682,10 @@ export function SquadUp({
   const GRID = "grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4";
 
   return (
-    <div ref={containerRef} className={cn("flex min-h-0 flex-1 flex-col gap-4", isFullscreen && "h-full overflow-auto bg-background p-6")}>
+    <div
+      ref={containerRef}
+      className={cn("flex min-h-0 flex-1 flex-col gap-4", isFullscreen && "h-full overflow-auto bg-background p-6")}
+    >
       <Card className="shrink-0 py-4">
         <CardContent className="flex flex-col gap-3">
           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -562,10 +720,15 @@ export function SquadUp({
                   <Plus />
                 </Button>
               </div>
-              <Button size="lg" onClick={go} disabled={learners.length === 0 || isShuffling || isGrouped}>
-                <Play className={isShuffling ? "animate-spin" : ""} />
-                {isShuffling ? "Shuffling…" : "Go"}
-              </Button>
+              {dealing ? (
+                <Button size="lg" variant="outline" onClick={skipDeal}>
+                  <FastForward /> Skip
+                </Button>
+              ) : (
+                <Button size="lg" onClick={go} disabled={learners.length === 0 || isGrouped}>
+                  <Play /> Go
+                </Button>
+              )}
               <p className="text-sm font-medium text-muted-foreground" aria-live="polite">
                 {hint}
               </p>
@@ -579,6 +742,20 @@ export function SquadUp({
                   <Button variant="outline" size="sm" onClick={reset}>
                     <RotateCcw /> Reset
                   </Button>
+                  {sectionId !== undefined && (
+                    <Button
+                      size="sm"
+                      disabled={savedNow}
+                      onClick={() =>
+                        setSaveName(
+                          updating?.name ??
+                            `Groups – ${new Date().toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" })}`,
+                        )
+                      }
+                    >
+                      {savedNow ? <Check /> : <Save />} {savedNow ? "Saved" : "Save groups"}
+                    </Button>
+                  )}
                 </>
               )}
               <Button variant="outline" size="sm" onClick={toggleFullscreen}>
@@ -596,7 +773,7 @@ export function SquadUp({
                   Drag &amp; drop
                 </label>
               )}
-              {!isShuffling && (
+              {!dealing && (
                 <span className="flex items-center gap-1.5">
                   <Crown className="size-3 text-amber-500" />
                   {!isGrouped
@@ -640,25 +817,34 @@ export function SquadUp({
             <div className="min-h-0 flex-1 overflow-auto">
               <div className={GRID}>{columns}</div>
             </div>
-            <UnassignedDropCard members={unassignedMembers} leaders={leaders} onToggleLeader={toggleLeader} animate={animateEntrance} />
+            <UnassignedDropCard
+              members={unassignedMembers}
+              leaders={leaders}
+              onToggleLeader={toggleLeader}
+              animate={false}
+            />
           </DragDropProvider>
         ) : (
           <>
-            {isGrouped && (
-              <div className="min-h-0 flex-1 overflow-auto">
-                <div className={GRID}>{columns}</div>
-              </div>
-            )}
-            {/* The roster: before a shuffle it holds everyone (click to set leaders); after, any leftovers. */}
-            {(!isGrouped || bottomMembers.length > 0) && (
+            {/* The groups show from the start, empty until the deal fills them. */}
+            <div className="min-h-0 flex-1 overflow-auto">
+              <div className={GRID}>{columns}</div>
+            </div>
+            {/* The roster: before a deal it holds everyone (click to set leaders); after, any leftovers. */}
+            {(phase === "idle" || (dealing ? deck.length > 0 : bottomMembers.length > 0)) && (
               <Card className="shrink-0 gap-0 border-2 border-dashed border-muted-foreground/30 bg-transparent py-4 shadow-none">
                 <CardContent>
                   <p className="mb-2 text-sm font-medium">
                     {isGrouped ? (
                       "Unassigned"
+                    ) : dealing ? (
+                      <>
+                        Learners <span className="font-normal text-muted-foreground">— waiting to be dealt</span>
+                      </>
                     ) : (
                       <>
-                        Learners <span className="font-normal text-muted-foreground">— click to make group leaders</span>
+                        Learners{" "}
+                        <span className="font-normal text-muted-foreground">— click to make group leaders</span>
                       </>
                     )}
                   </p>
@@ -677,6 +863,7 @@ export function SquadUp({
                             className={cn(
                               "flex items-center gap-2 rounded-md px-2 py-1 text-left hover:bg-accent",
                               isLeader && "bg-amber-50",
+                              dealing && !waiting.has(l.id) && "invisible",
                             )}
                           >
                             <span
@@ -700,6 +887,46 @@ export function SquadUp({
           </>
         )}
       </div>
+      <Dialog open={saveName !== null} onOpenChange={(o) => !o && setSaveName(null)}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>{updating ? `Save “${updating.name}”` : "Save groups"}</DialogTitle>
+            <DialogDescription>
+              {updating
+                ? "Update the saved groups, or keep them and save these as a new set."
+                : "Saved groups show in the section’s Groups tab."}
+            </DialogDescription>
+          </DialogHeader>
+          <form
+            id="save-groups"
+            onSubmit={(e) => {
+              e.preventDefault();
+              save(false);
+            }}
+          >
+            <Input
+              autoFocus
+              aria-label="Name"
+              placeholder="e.g. Science project groups"
+              value={saveName ?? ""}
+              onChange={(e) => setSaveName(e.target.value)}
+            />
+          </form>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSaveName(null)}>
+              Cancel
+            </Button>
+            {updating && (
+              <Button variant="outline" disabled={!saveName?.trim()} onClick={() => save(true)}>
+                Save as new
+              </Button>
+            )}
+            <Button type="submit" form="save-groups" disabled={!saveName?.trim()}>
+              <Save /> {updating ? "Update" : "Save"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

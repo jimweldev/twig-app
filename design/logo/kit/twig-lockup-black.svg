@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 508 312">
+  <title>TWIG</title>
+  <!-- The symbol is the t; "wig" is drawn as round strokes of the same weight. -->
+  <g fill="#000000" transform="translate(-48 -4)">
+    <path d="M104 178 Q101 110 118 42 Q128 32 137 42 Q140 110 138 174 Q140 202 168 204 Q186 206 196 196 Q194 228 160 232 Q106 232 104 178 Z"/>
+    <path d="M122 92 Q96 86 68 84 Q56 90 68 98 Q96 102 120 110 Z"/>
+    <path d="M132 112 A64 64 0 0 1 216 52 A64 64 0 0 1 132 112 Z"/>
+  </g>
+  <g transform="translate(-22 0)">
+  <g fill="none" stroke="#000000" stroke-width="30" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M211 100 L241 214 L271 118 L301 214 L331 100"/>
+    <path d="M372 112 V214"/>
+    <circle cx="452" cy="158" r="42"/>
+    <path d="M494 112 V232 Q494 286 446 286 Q418 286 404 272"/>
+  </g>
+  <circle cx="372" cy="62" r="18" fill="#000000"/>
+  </g>
+</svg>

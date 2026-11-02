@@ -3,7 +3,7 @@ import type { CertificateImage } from "@/lib/db";
 /** Longest side kept: A4 at 300 dpi. Bigger photos are scaled down so the database stays small. */
 const MAX_SIDE = 3508;
 
-const loadImage = (src: string) =>
+export const loadImage = (src: string) =>
   new Promise<HTMLImageElement>((resolve, reject) => {
     const img = new Image();
     img.onload = () => resolve(img);
@@ -11,7 +11,7 @@ const loadImage = (src: string) =>
     img.src = src;
   });
 
-const readAsDataUrl = (file: File) =>
+export const readAsDataUrl = (file: File) =>
   new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(reader.result as string);
@@ -19,23 +19,34 @@ const readAsDataUrl = (file: File) =>
     reader.readAsDataURL(file);
   });
 
-/** Reads an uploaded design into a data: URL with its pixel size. */
-export async function readCertificateImage(file: File): Promise<CertificateImage> {
-  if (!file.type.startsWith("image/")) throw new Error("Choose an image file (PNG or JPG).");
-  const dataUrl = await readAsDataUrl(file);
-  const img = await loadImage(dataUrl);
-  const scale = Math.min(1, MAX_SIDE / Math.max(img.naturalWidth, img.naturalHeight));
-  if (scale === 1) return { image: dataUrl, width: img.naturalWidth, height: img.naturalHeight };
+/** A rectangle of the image in its own pixels. */
+export interface PixelArea {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
 
-  const width = Math.round(img.naturalWidth * scale);
-  const height = Math.round(img.naturalHeight * scale);
+/**
+ * Cuts `area` out of the image and scales it down to at most MAX_SIDE, as a data: URL
+ * with its pixel size. PNG keeps transparency and crisp text; photos become JPG to stay small.
+ */
+export async function cropCertificateImage(src: string, area: PixelArea, png: boolean): Promise<CertificateImage> {
+  const img = await loadImage(src);
+  const scale = Math.min(1, MAX_SIDE / Math.max(area.width, area.height));
+  const width = Math.max(1, Math.round(area.width * scale));
+  const height = Math.max(1, Math.round(area.height * scale));
   const canvas = document.createElement("canvas");
   canvas.width = width;
   canvas.height = height;
-  canvas.getContext("2d")!.drawImage(img, 0, 0, width, height);
-  // PNG keeps transparency and crisp text; photos become JPG to stay small.
-  const type = file.type === "image/png" ? "image/png" : "image/jpeg";
-  return { image: canvas.toDataURL(type, 0.92), width, height };
+  canvas.getContext("2d")!.drawImage(img, area.x, area.y, area.width, area.height, 0, 0, width, height);
+  return { image: canvas.toDataURL(png ? "image/png" : "image/jpeg", 0.92), width, height };
+}
+
+/** Checks the file is an image and reads it for cropping. */
+export async function openCertificateFile(file: File): Promise<{ src: string; png: boolean }> {
+  if (!file.type.startsWith("image/")) throw new Error("Choose an image file (PNG or JPG).");
+  return { src: await readAsDataUrl(file), png: file.type === "image/png" };
 }
 
 /** "Honor Certificate.png" -> "Honor Certificate" */
